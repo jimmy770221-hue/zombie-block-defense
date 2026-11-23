@@ -2,7 +2,7 @@
 window.CONFIG = {
   // ===== 基本 =====
   title: '殭屍防線',
-  version: '1.0',
+  version: '1.1',
   saveKey: 'zbd_save',        // 瀏覽器存檔名稱
   width: 540,                 // 畫面邏輯寬（9:16）
   height: 960,                // 畫面邏輯高
@@ -11,6 +11,7 @@ window.CONFIG = {
 
   // ===== 金幣 =====
   coinDivisor: 10,            // 金幣 = 分數 ÷ 10（無條件捨去）
+  coinLevelBonus: 0.05,       // 金幣再乘以 (1 + 這個數 × (等級 − 1))
 
   // ===== 廣告 =====
   ads: {
@@ -32,19 +33,55 @@ window.CONFIG = {
     warnDist: 50,             // 離圍牆多近就開始閃紅色警告
     start: 2,                 // 開局幾隻
     max: 9,                   // 畫面上最多幾隻
-    lanes: [70, 150, 230, 310, 390, 470],   // 殭屍出現的左右位置
-    spawnEveryStart: 8,       // 每放幾個方塊來新殭屍（開局）
-    spawnEveryMin: 5,         // 最快每幾個方塊來新殭屍
-    spawnEveryScoreStep: 200, // 每多少分，間隔少 1
-    extraEveryScore: 400,     // 每多少分，每次多來 1 隻
-    speedScoreDiv: 500,       // 前進距離倍率 = 1 + 分數÷這個數
-    speedMax: 0.6,            // 前進倍率最多加到 +60%
+    lanes: [60, 130, 200, 270, 340, 410],   // 殭屍出現的左右位置（右邊留給按鈕欄）
     // step＝每放一個方塊前進幾像素；knock＝被砲彈打中往後退幾像素
     types: {
-      normal: { r: 26, step: 6, knock: 75, unlockScore: 0,  weight: 6, color: '#7ed957' },
-      fat:    { r: 34, step: 4,  knock: 45, unlockScore: 80, weight: 2, color: '#5fbf45' },
-      fast:   { r: 21, step: 11, knock: 75, unlockScore: 40, weight: 2, color: '#a6ee6a' }
+      normal: { r: 26, step: 6, knock: 75, unlockLevel: 1, weight: 6, color: '#7ed957' },
+      fat:    { r: 34, step: 4,  knock: 45, unlockLevel: 5, weight: 2, color: '#5fbf45' },
+      fast:   { r: 21, step: 11, knock: 75, unlockLevel: 3, weight: 2, color: '#a6ee6a' }
     }
+  },
+
+  // ===== 等級（無限關卡）=====
+  levels: {
+    scoreNeed: 150,           // 本等級內拿到幾分就升級
+    secondsNeed: 45,          // 或本等級玩滿幾秒就升級（暫停、看廣告不算）
+    spawnEveryStart: 8,       // 每放幾個方塊來新殭屍（1 級）
+    spawnEveryLevels: 2,      // 每幾級，間隔少 1
+    spawnEveryMin: 3,         // 最快每幾個方塊來新殭屍
+    stepPerLevel: 0.04,       // 前進距離倍率 = 1 + 這個數 × (等級 − 1)
+    stepPerLevelLate: 0.02,   // 超過 lateFrom 級之後，每級改加這個數
+    lateFrom: 15,
+    waveEvery: 5,             // 每幾級（5、10、15…）一次多來幾隻
+    waveExtra: 2,
+    knockback: 60,            // 升級獎勵：所有殭屍往後退幾像素
+    bannerSec: 1.2,           // 「LEVEL N！」顯示秒數
+    bigCells: 5,              // 幾格以上算大方塊（難放）
+    bigBoostPerLevel: 0.1,    // 大方塊／難放方塊的機率，每級多 10%
+    bigBoostMax: 2            // 最多變成原本的幾倍
+  },
+
+  // ===== 介面 =====
+  ui: { stripX: 462, hintText: ['把方塊拖進格子，', '排滿一行就開砲！'] },
+
+  // ===== 商店（只用金幣）=====
+  shop: {
+    items: [
+      { id: 'bomb',    kind: 'item',  icon: '💣', name: '炸彈',       price: 50,  desc: '點一格，清掉周圍 3×3（不計分）' },
+      { id: 'shuffle', kind: 'item',  icon: '🔀', name: '換一組方塊', price: 30,  desc: '重抽托盤上還沒用的方塊' },
+      { id: 'freeze',  kind: 'item',  icon: '❄️', name: '冰凍',       price: 40,  desc: '接下來放 3 個方塊，殭屍不前進、不出新殭屍' },
+      { id: 'candy',   kind: 'theme', icon: '🍬', name: '糖果方塊',   price: 500, desc: '把方塊換成糖果風格' }
+    ],
+    bombSize: 1,              // 炸彈範圍：中心往外 1 格 = 3×3
+    freezePlacements: 3       // 冰凍持續幾次放置
+  },
+
+  // ===== 排行榜 =====
+  board: {
+    size: 10,
+    nameMax: 8,
+    names: ['五指山阿伯', '夜市守門員', '巷口防衛隊', '檳榔西施', '便利商店店員', '機車大隊長', '阿公的柑仔店', '泡麵守護者',
+            '珍奶續杯王', '滷肉飯戰神', '廟口大富翁', '捷運博愛座', '夜市蚵仔煎', '騎樓攤販王', '鹹酥雞老闆']
   },
 
   // ===== 砲台 =====
@@ -66,6 +103,7 @@ window.CONFIG = {
 
   // ===== 6 種鮮豔顏色 =====
   colors: ['#ff4d5e', '#ff9f1c', '#ffd23f', '#3ddc84', '#3aa7ff', '#b46bff'],
+  candyColors: ['#ff6fa8', '#ffb347', '#ffe66d', '#7fe0a8', '#6ec6ff', '#c58bff'],   // 糖果主題
 
   // ===== 方塊形狀（# 有方塊，. 空；w 是出現機率權重）=====
   shapes: [
@@ -80,7 +118,7 @@ window.CONFIG = {
     { w: 2, m: ['#.', '##', '#.'] }, { w: 2, m: ['.#', '##', '.#'] },
     { w: 2, m: ['#.', '#.', '##'] }, { w: 2, m: ['.#', '.#', '##'] }, // 4 格 L
     { w: 2, m: ['##', '#.', '#.'] }, { w: 2, m: ['##', '.#', '.#'] },
-    { w: 1, m: ['.##', '##.'] }, { w: 1, m: ['##.', '.##'] },         // S / Z
+    { w: 1, hard: true, m: ['.##', '##.'] }, { w: 1, hard: true, m: ['##.', '.##'] },         // S / Z
     { w: 1, m: ['#####'] }, { w: 1, m: ['#', '#', '#', '#', '#'] },   // 5 格直條
     { w: 1, m: ['.#.', '###', '.#.'] },                               // 十字
     { w: 1, m: ['#..', '#..', '###'] }                                // 大 L

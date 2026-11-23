@@ -1,11 +1,16 @@
-// 《殭屍防線》玩法：8×8 放方塊，排滿一行或一列就消除
-// 第 2 天：格子、托盤、拖曳放置、消除、分數（殭屍和砲台在第 3 天）
+// 《殭屍防線》玩法：8×8 放方塊，排滿一行或一列就消除，消除就開砲打殭屍
+// v1.1：等級制（無限）、道具、糖果主題、新手提示
 window.Game = (function () {
   const C = window.CONFIG, G = C.grid, CELL = G.cell, N = G.size;
   let core, shapes, totalW;
   let grid, tray, drag, flashes, particles, texts, shake, stuckTimer;
   let zombies, balls, recoil, revived, ending, sinceSpawn, time;
-  const Z = C.zombies, WALL_Y = C.zombieZone.wallY;
+  const Z = C.zombies, WALL_Y = C.zombieZone.wallY, L = C.levels, SH = C.shop;
+  // v1.1 新增狀態
+  let level = 1, lvScore = 0, lvTime = 0, roundTime = 0, lvBanner = null, lvKey = '';
+  let freezeLeft = 0, used = {}, bombMode = false, aim = null, theme = 'classic', hint = false, notice = null;
+  let itemBtns = {};
+  function pal() { return theme === 'candy' ? C.candyColors : C.colors; }
 
   // ---------- 工具 ----------
   function rnd(n) { return Math.floor(Math.random() * n); }
@@ -30,7 +35,25 @@ window.Game = (function () {
     ctx.closePath();
   }
   // 圓角方塊：有亮面和陰影，不用圖片
+  function candyBlock(ctx, x, y, s, base, alpha) {
+    const pad = s * 0.05;
+    ctx.save();
+    ctx.globalAlpha = alpha === undefined ? 1 : alpha;
+    ctx.fillStyle = shade(base, -0.4);                                  // 下方陰影
+    rrect(ctx, x + pad, y + pad + s * 0.08, s - pad * 2, s - pad * 2 - s * 0.02, s * 0.4); ctx.fill();
+    ctx.fillStyle = base;                                               // 糖果本體
+    rrect(ctx, x + pad, y + pad, s - pad * 2, s - pad * 2 - s * 0.07, s * 0.4); ctx.fill();
+    ctx.save();                                                         // 斜紋
+    rrect(ctx, x + pad, y + pad, s - pad * 2, s - pad * 2 - s * 0.07, s * 0.4); ctx.clip();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = s * 0.13;
+    for (let k = -1; k <= 1; k++) { ctx.beginPath(); ctx.moveTo(x + s * (0.2 + k * 0.4), y + s); ctx.lineTo(x + s * (0.9 + k * 0.4), y); ctx.stroke(); }
+    ctx.restore();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';                            // 亮點
+    ctx.beginPath(); ctx.ellipse(x + s * 0.3, y + s * 0.27, s * 0.12, s * 0.07, -0.6, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
   function block(ctx, x, y, s, ci, alpha) {
+    if (theme === 'candy') { candyBlock(ctx, x, y, s, pal()[ci], alpha); return; }
     const base = C.colors[ci], pad = s * 0.04;
     ctx.save();
     ctx.globalAlpha = alpha === undefined ? 1 : alpha;
@@ -51,9 +74,14 @@ window.Game = (function () {
     });
     return { cells: cells, w: w, h: m.length };
   }
+  // 等級越高，大方塊／難放方塊越常出現（最多變成原本的 2 倍）
+  function bigBoost() { return Math.min(L.bigBoostMax, 1 + L.bigBoostPerLevel * (level - 1)); }
   function pickShape() {
-    let t = Math.random() * totalW;
-    for (let i = 0; i < shapes.length; i++) { t -= shapes[i].weight; if (t < 0) return shapes[i]; }
+    const b = bigBoost();
+    let tot = 0;
+    for (let i = 0; i < shapes.length; i++) tot += shapes[i].weight * (shapes[i].hard ? b : 1);
+    let t = Math.random() * tot;
+    for (let i = 0; i < shapes.length; i++) { t -= shapes[i].weight * (shapes[i].hard ? b : 1); if (t < 0) return shapes[i]; }
     return shapes[shapes.length - 1];
   }
 
@@ -92,7 +120,7 @@ window.Game = (function () {
 
   // ---------- 殭屍 ----------
   function pickType() {
-    const names = Object.keys(Z.types).filter(function (k) { return score >= Z.types[k].unlockScore; });
+    const names = Object.keys(Z.types).filter(function (k) { return level >= Z.types[k].unlockLevel; });
     let tot = 0; names.forEach(function (k) { tot += Z.types[k].weight; });
     let t = Math.random() * tot;
     for (let i = 0; i < names.length; i++) { t -= Z.types[names[i]].weight; if (t < 0) return names[i]; }
@@ -107,7 +135,13 @@ window.Game = (function () {
     const x = free[rnd(free.length)] + rnd(21) - 10;
     zombies.push({ type: type || pickType(), x: x, ty: Z.spawnY, y: Z.spawnY - 50, hit: 0, pending: 0, ph: Math.random() * 6 });
   }
-  function stepMult() { return 1 + Math.min(Z.speedMax, score / Z.speedScoreDiv); }
+  // 前進距離倍率：每級 +0.04，超過 15 級後每級 +0.02，不封頂
+  function stepMult() {
+    if (level <= L.lateFrom) return 1 + L.stepPerLevel * (level - 1);
+    return 1 + L.stepPerLevel * (L.lateFrom - 1) + L.stepPerLevelLate * (level - L.lateFrom);
+  }
+  // 每放幾個方塊來新殭屍：8 起跳，每 2 級少 1，最少 3
+  function spawnEvery() { return Math.max(L.spawnEveryMin, L.spawnEveryStart - Math.floor((level - 1) / L.spawnEveryLevels)); }
   function frontZombie() {
     let f = null;
     zombies.forEach(function (z) { if (!f || z.ty > f.ty) f = z; });
@@ -115,15 +149,31 @@ window.Game = (function () {
   }
   // 每放一個方塊，殭屍前進一步；到間隔就來新殭屍
   function advanceZombies() {
+    if (freezeLeft > 0) { freezeLeft--; return; }          // 冰凍中：不前進、不出新殭屍
     const m = stepMult();
     zombies.forEach(function (z) { z.ty += Z.types[z.type].step * m; });
     sinceSpawn++;
-    const every = Math.max(Z.spawnEveryMin, Z.spawnEveryStart - Math.floor(score / Z.spawnEveryScoreStep));
-    if (sinceSpawn >= every) {
-      sinceSpawn = 0;
-      const cnt = 1 + Math.floor(score / Z.extraEveryScore);
-      for (let i = 0; i < cnt; i++) spawnZombie();
-    }
+    if (sinceSpawn >= spawnEvery()) { sinceSpawn = 0; spawnZombie(); }
+  }
+
+  // ---------- 等級 ----------
+  function syncLevel(force) {
+    const prog = Math.max(lvScore / L.scoreNeed, lvTime / L.secondsNeed);
+    const key = level + ':' + Math.round(Math.min(1, prog) * 100);
+    if (force || key !== lvKey) { lvKey = key; core.setLevel(level, prog); }
+  }
+  function checkLevel() {
+    if (ending) return;
+    if (lvScore >= L.scoreNeed || lvTime >= L.secondsNeed) levelUp();
+  }
+  function levelUp() {
+    level++; lvScore = 0; lvTime = 0;                      // 計時重來
+    zombies.forEach(function (z) { z.ty = Math.max(Z.spawnY, z.ty - L.knockback); });   // 獎勵：全部往後退
+    if (level % L.waveEvery === 0) for (let i = 0; i < L.waveExtra; i++) spawnZombie();    // 第 5、10、15… 級：一次多來幾隻
+    lvBanner = { t: 0, n: level };
+    core.Sfx.play('levelup'); core.buzz(30);
+    core.track('level_up', { level: level, score: score, seconds: Math.round(roundTime) });
+    syncLevel(true);
   }
   // 每消除 1 條，砲台打 1 發，擊退最前面的殭屍
   function fireLines(n) {
@@ -139,12 +189,12 @@ window.Game = (function () {
   // ---------- 結束與復活 ----------
   function gameOver(reason) {
     if (ending) return;
-    ending = true; stuckTimer = -1;
+    ending = true; stuckTimer = -1; bombMode = false; aim = null; refreshItems();
     const text = reason === 'zombie' ? '殭屍衝破圍牆了！' : '沒有地方可以放方塊了！';
-    function finish() { core.Sfx.play('over'); core.endGame(score, reason); }
+    function finish() { core.Sfx.play('over'); core.endGame(score, reason, { level: level }); }
     if (revived) { finish(); return; }
     core.Sfx.play('over');
-    core.askRevive(text, function () { revived = true; ending = false; doRevive(); }, finish);
+    core.askRevive(text, function () { revived = true; ending = false; doRevive(); refreshItems(); }, finish);
   }
   function doRevive() {
     const sz = C.revive.clearSize, off = Math.floor((N - sz) / 2);
@@ -192,9 +242,11 @@ window.Game = (function () {
       addText(G.x + N * CELL / 2, G.y + N * CELL / 2 - 20, '+' + lineScore, '#ffe27a', 44);
       if (n >= 2) addText(G.x + N * CELL / 2, G.y + N * CELL / 2 - 80, '連擊 ×' + n, '#ff7a7a', 56);
     }
-    score += gain;
+    score += gain; lvScore += gain;
     core.setScore(score);
+    if (hint) { hint = false; core.Save.set('hintSeen', true); }     // 放了第一個方塊，新手提示就收起來
     if (n > 0) fireLines(n);          // 先砲擊擊退
+    checkLevel();                     // 升級（獎勵擊退）
     advanceZombies();                 // 再前進一步
     if (warning()) core.Sfx.play('warn');
 
@@ -208,11 +260,60 @@ window.Game = (function () {
     stuckTimer = left.every(function (p) { return !anyFit(p.shape); }) ? 0.7 : -1;
   }
 
+  // ---------- 道具（每局每種最多用 1 次）----------
+  function refreshItems() {
+    Object.keys(itemBtns).forEach(function (id) {
+      const b = itemBtns[id], n = core.Items.count(id);
+      b.lastChild.textContent = n;
+      b.classList.toggle('off', n <= 0 || !!used[id] || !!ending);
+      b.classList.toggle('aim', id === 'bomb' && bombMode);
+    });
+  }
+  function useItem(id) {
+    if (ending || drag || !core.isPlaying() || used[id] || core.Items.count(id) <= 0) return;
+    core.Sfx.play('click');
+    if (id === 'bomb') { bombMode = !bombMode; aim = null; refreshItems(); return; }
+    if (id === 'freeze') {
+      core.Items.use('freeze'); used.freeze = true; freezeLeft = SH.freezePlacements;
+      notice = { t: 0, text: '冰凍！' }; core.Sfx.play('clear');
+    } else if (id === 'shuffle') {
+      const slots = tray.filter(function (p) { return !p.used; }).map(function (p) { return p.slot; });
+      if (!slots.length) return;
+      core.Items.use('shuffle'); used.shuffle = true;
+      for (let k = 0; k < 10; k++) {
+        slots.forEach(function (sl) { tray[sl] = makePiece(sl, pickShape()); });
+        if (tray.some(function (p) { return !p.used && anyFit(p.shape); })) break;
+      }
+      core.Sfx.play('place'); checkStuck();
+    }
+    refreshItems();
+  }
+  function cellAt(x, y) {
+    const c = Math.floor((x - G.x) / CELL), r = Math.floor((y - G.y) / CELL);
+    return (r >= 0 && c >= 0 && r < N && c < N) ? { r: r, c: c } : null;
+  }
+  // 炸彈：清掉點到的格子周圍 3×3，不計分、不算連擊
+  function detonate(r, c) {
+    const R = SH.bombSize; let any = false;
+    for (let rr = r - R; rr <= r + R; rr++) for (let cc = c - R; cc <= c + R; cc++) {
+      if (rr < 0 || cc < 0 || rr >= N || cc >= N || !grid[rr][cc]) continue;
+      flashes.push({ r: rr, c: cc, color: grid[rr][cc].color, t: 0 }); grid[rr][cc] = null; any = true;
+    }
+    if (!any) { notice = { t: 0, text: '那裡沒有方塊' }; return; }      // 沒炸到東西就不扣道具
+    core.Items.use('bomb'); used.bomb = true; bombMode = false; aim = null;
+    shake = 0.25; core.Sfx.play('clear'); core.buzz(40);
+    refreshItems(); checkStuck();
+  }
+
   // ---------- 對外介面 ----------
   function start() {
     grid = []; for (let i = 0; i < N; i++) grid.push(new Array(N).fill(null));
     score = 0; drag = null; flashes = []; particles = []; texts = []; shake = 0; stuckTimer = -1;
     zombies = []; balls = []; recoil = 0; revived = false; ending = false; sinceSpawn = 0; time = 0;
+    level = 1; lvScore = 0; lvTime = 0; roundTime = 0; lvBanner = null; lvKey = '';
+    freezeLeft = 0; used = {}; bombMode = false; aim = null; notice = null;
+    theme = core.Save.get('theme'); hint = !core.Save.get('hintSeen');
+    syncLevel(true); refreshItems();
     for (let i = 0; i < Z.start; i++) spawnZombie();
     newTray();
     checkStuck();
@@ -220,7 +321,11 @@ window.Game = (function () {
   let score = 0;
 
   function update(dt) {
-    time += dt;
+    time += dt; roundTime += dt;
+    if (!ending) { lvTime += dt; checkLevel(); }
+    syncLevel(false);
+    if (lvBanner) { lvBanner.t += dt; if (lvBanner.t > L.bannerSec) lvBanner = null; }
+    if (notice) { notice.t += dt; if (notice.t > 1.2) notice = null; }
     // 殭屍平滑移動（被砲彈打中前先停住，打中後彈回去）
     zombies.forEach(function (z) {
       if (z.hit > 0) z.hit -= dt;
@@ -324,7 +429,7 @@ window.Game = (function () {
     // 碎片
     particles.forEach(function (p) {
       ctx.globalAlpha = Math.max(0, 1 - p.t / p.life);
-      ctx.fillStyle = p.css || C.colors[p.color];
+      ctx.fillStyle = p.css || pal()[p.color];
       ctx.fillRect(p.x - p.s / 2, p.y - p.s / 2, p.s, p.s);
     });
     ctx.globalAlpha = 1;
@@ -344,7 +449,52 @@ window.Game = (function () {
       ctx.strokeText(t.text, t.x, y); ctx.fillStyle = t.color; ctx.fillText(t.text, t.x, y);
     });
     ctx.globalAlpha = 1;
+    drawOverlays(ctx);
     ctx.restore();
+  }
+
+  // ---------- 提示、升級字樣、道具效果 ----------
+  function stext(ctx, text, x, y, size, color) {
+    ctx.font = '900 ' + size + 'px "PingFang TC","Microsoft JhengHei",sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.lineWidth = Math.max(5, size / 7); ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(0,0,0,.65)'; ctx.strokeText(text, x, y);
+    ctx.fillStyle = color; ctx.fillText(text, x, y);
+  }
+  function drawOverlays(ctx) {
+    const mx = G.x + N * CELL / 2, my = G.y + N * CELL / 2;
+    if (freezeLeft > 0) {
+      ctx.fillStyle = 'rgba(120,200,255,0.18)'; ctx.fillRect(0, 0, C.ui.stripX, WALL_Y);
+      stext(ctx, '❄ 冰凍中　剩 ' + freezeLeft + ' 次', 235, 240, 26, '#bfe8ff');
+    }
+    if (bombMode) {
+      if (aim) {
+        const R = SH.bombSize;
+        for (let rr = aim.r - R; rr <= aim.r + R; rr++) for (let cc = aim.c - R; cc <= aim.c + R; cc++) {
+          if (rr < 0 || cc < 0 || rr >= N || cc >= N) continue;
+          ctx.fillStyle = 'rgba(255,120,40,0.45)';
+          rrect(ctx, G.x + cc * CELL + 3, G.y + rr * CELL + 3, CELL - 6, CELL - 6, 9); ctx.fill();
+        }
+      }
+      stext(ctx, '💣 點一格引爆（再按一次炸彈取消）', mx, G.y + N * CELL + 31, 22, '#ffd29a');
+    }
+    if (hint) {
+      const w = 410, h = 130, bob = Math.sin(time * 5) * 6;
+      ctx.fillStyle = 'rgba(0,0,0,0.72)'; rrect(ctx, mx - w / 2, my - h / 2, w, h, 22); ctx.fill();
+      ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 4; rrect(ctx, mx - w / 2, my - h / 2, w, h, 22); ctx.stroke();
+      stext(ctx, C.ui.hintText[0], mx, my - 8, 33, '#fff');
+      stext(ctx, C.ui.hintText[1], mx, my + 36, 33, '#ffe27a');
+      ctx.fillStyle = '#ffd24a'; ctx.beginPath();
+      ctx.moveTo(mx - 16, my + h / 2 + 8 + bob); ctx.lineTo(mx + 16, my + h / 2 + 8 + bob); ctx.lineTo(mx, my + h / 2 + 30 + bob); ctx.closePath(); ctx.fill();
+    }
+    if (lvBanner) {
+      const t = lvBanner.t, fade = L.bannerSec;
+      const a = t < 0.15 ? t / 0.15 : Math.max(0, 1 - (t - 0.15) / (fade - 0.15));
+      ctx.save(); ctx.globalAlpha = a; ctx.translate(core.W / 2, 118);
+      const sc = 1 + Math.max(0, 0.3 - t) * 1.2; ctx.scale(sc, sc);
+      stext(ctx, 'LEVEL ' + lvBanner.n + '！', 0, 0, 64, '#ffe27a');
+      ctx.restore();
+    }
+    if (notice) { ctx.save(); ctx.globalAlpha = Math.max(0, 1 - notice.t / 1.2); stext(ctx, notice.text, mx, my, 34, '#fff'); ctx.restore(); }
   }
 
   // ---------- 殭屍區繪製（先用程式畫，第 4 天換成圖片）----------
@@ -400,6 +550,8 @@ window.Game = (function () {
     if (ART.bg) { ctx.imageSmoothingEnabled = false; ctx.drawImage(ART.bg, 0, 60, 256, 118, 0, C.zombieZone.top, core.W, WALL_Y - C.zombieZone.top); }
     ctx.fillStyle = ART.bg ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.18)';
     ctx.fillRect(0, C.zombieZone.top, core.W, WALL_Y - C.zombieZone.top);
+    ctx.fillStyle = 'rgba(0,0,0,0.38)';                                        // 右邊按鈕欄（殭屍不會走到這裡）
+    ctx.fillRect(C.ui.stripX, C.zombieZone.top, core.W - C.ui.stripX, WALL_Y - C.zombieZone.top);
     zombies.slice().sort(function (a, b) { return a.y - b.y; }).forEach(function (z) { drawZombie(ctx, z); });
     // 圍牆
     if (ART.wall) { ctx.imageSmoothingEnabled = false; for (let i = 0; i < 8; i++) ctx.drawImage(ART.wall, 0, 8, 64, 52, i * 67.5, WALL_Y - 6, 68, 44); }
@@ -431,6 +583,10 @@ window.Game = (function () {
   }
 
   function onPointer(type, x, y) {
+    if (bombMode) {                                         // 炸彈瞄準中：點格子引爆
+      if (type === 'down' && y >= C.tray.topY) { bombMode = false; aim = null; refreshItems(); }   // 去拖方塊就取消瞄準
+      else { if (type === 'up') { const t = cellAt(x, y); aim = null; if (t) detonate(t.r, t.c); } else aim = cellAt(x, y); return; }
+    }
     if (type === 'down') {
       if (drag || y < C.tray.topY) return;
       for (let i = 0; i < tray.length; i++) {
@@ -454,7 +610,21 @@ window.Game = (function () {
   function init(c) {
     core = c;
     shapes = C.shapes.map(function (s) { const o = parse(s.m); o.weight = s.w; return o; });
+    shapes.forEach(function (o, i) { o.hard = !!C.shapes[i].hard || o.cells.length >= L.bigCells; });
     totalW = shapes.reduce(function (a, s) { return a + s.weight; }, 0);
+    // 升級音效
+    core.Sfx.presets.levelup = function () {
+      core.Sfx.tone(523, 0.1, 'square', 0.16); core.Sfx.tone(659, 0.1, 'square', 0.16, null, 0.1); core.Sfx.tone(784, 0.26, 'square', 0.2, null, 0.2);
+    };
+    // 道具按鈕（右邊一欄，不蓋格子和托盤）
+    const box = document.createElement('div'); box.id = 'hud-items';
+    SH.items.filter(function (it) { return it.kind === 'item'; }).forEach(function (it) {
+      const b = document.createElement('button'); b.className = 'itbtn'; b.textContent = it.icon;
+      b.appendChild(document.createElement('i'));
+      b.onclick = function () { useItem(it.id); };
+      itemBtns[it.id] = b; box.appendChild(b);
+    });
+    document.getElementById('hud').appendChild(box);
   }
 
   return {
@@ -467,7 +637,10 @@ window.Game = (function () {
       place: function (i, r, c) { const p = tray[i]; if (!p || p.used || !canPlace(p.shape, r, c)) return false; place(p, r, c); return true; },
       canPlace: function (i, r, c) { const p = tray[i]; return !!p && !p.used && canPlace(p.shape, r, c); },
       zombies: function () { return zombies; },
-      info: function () { return { revived: revived, ending: ending, score: score }; },
+      info: function () { return { revived: revived, ending: ending, score: score, level: level, lvScore: lvScore, lvTime: lvTime, roundTime: roundTime, freezeLeft: freezeLeft, bombMode: bombMode, used: used, hint: hint, every: spawnEvery(), step: stepMult(), bigBoost: bigBoost() }; },
+      setLevelState: function (lv, sc, tm) { level = lv; lvScore = sc; lvTime = tm; syncLevel(true); },
+      detonate: detonate, cellAt: cellAt,
+      levelUp: levelUp, types: function () { return Object.keys(Z.types).filter(function (k) { return level >= Z.types[k].unlockLevel; }); }, shapeBoost: function () { return bigBoost(); },
       setZombies: function (list) { zombies = []; list.forEach(function (o) { spawnZombie(o.type); const z = zombies[zombies.length - 1]; z.ty = o.ty; z.y = o.ty; }); },
       geom: function () { return { G: G, CELL: CELL, tray: C.tray, liftY: C.drag.liftY }; }
     }
