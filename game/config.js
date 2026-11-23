@@ -23,22 +23,23 @@ window.CONFIG = {
   maxLogs: 500,               // 最多保留幾筆紀錄
 
   // ===== 格子與版面（邏輯座標 540×960）=====
-  grid: { size: 8, cell: 56, x: 46, y: 290 },   // 8×8，每格 56
-  zombieZone: { top: 0, wallY: 250 },           // 殭屍區在最上方，圍牆在 y=250
-  tray: { y: 850, slotX: [90, 270, 450], maxCell: 34, slotW: 160, topY: 772 },
+  grid: { size: 8, cell: 44, x: 94, y: 424 },   // 8×8，每格 44
+  zombieZone: { top: 0, wallY: 390 },           // 殭屍區在最上方（約畫面 40%），圍牆在 y=390
+  tray: { y: 870, slotX: [90, 270, 450], maxCell: 30, slotW: 160, topY: 792, h: 156 },
 
   // ===== 殭屍（每放一個方塊，殭屍前進一步）=====
   zombies: {
-    spawnY: 125,              // 殭屍出生位置（腳底 y）
-    warnDist: 50,             // 離圍牆多近就開始閃紅色警告
+    spawnY: 150,              // 殭屍出生位置（腳底 y）
+    warnDist: 96,             // 離圍牆多近就開始閃紅色警告
     start: 2,                 // 開局幾隻
     max: 9,                   // 畫面上最多幾隻
+    spawnGap: 86,             // 同一路上，前一隻要走出這麼遠，後面才會再出
     lanes: [60, 130, 200, 270, 340, 410],   // 殭屍出現的左右位置（右邊留給按鈕欄）
     // step＝每放一個方塊前進幾像素；knock＝被砲彈打中往後退幾像素
     types: {
-      normal: { r: 26, step: 6, knock: 75, unlockLevel: 1, weight: 6, color: '#7ed957' },
-      fat:    { r: 34, step: 4,  knock: 45, unlockLevel: 5, weight: 2, color: '#5fbf45' },
-      fast:   { r: 21, step: 11, knock: 75, unlockLevel: 3, weight: 2, color: '#a6ee6a' }
+      normal: { r: 26, step: 11.5, knock: 144, unlockLevel: 1, weight: 6, color: '#7ed957' },
+      fat:    { r: 34, step: 7.7, knock: 86, unlockLevel: 5, weight: 2, color: '#5fbf45' },
+      fast:   { r: 21, step: 21, knock: 144, unlockLevel: 3, weight: 2, color: '#a6ee6a' }
     }
   },
 
@@ -54,7 +55,7 @@ window.CONFIG = {
     lateFrom: 15,
     waveEvery: 5,             // 每幾級（5、10、15…）一次多來幾隻
     waveExtra: 2,
-    knockback: 60,            // 升級獎勵：所有殭屍往後退幾像素
+    knockback: 115,            // 升級獎勵：所有殭屍往後退幾像素
     bannerSec: 1.2,           // 「LEVEL N！」顯示秒數
     bigCells: 5,              // 幾格以上算大方塊（難放）
     bigBoostPerLevel: 0.1,    // 大方塊／難放方塊的機率，每級多 10%

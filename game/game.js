@@ -129,7 +129,7 @@ window.Game = (function () {
   function spawnZombie(type) {
     if (zombies.length >= Z.max) return;
     const free = Z.lanes.filter(function (x) {
-      return zombies.every(function (z) { return !(Math.abs(z.x - x) < 60 && z.ty < Z.spawnY + 45); });
+      return zombies.every(function (z) { return !(Math.abs(z.x - x) < 60 && z.ty < Z.spawnY + Z.spawnGap); });
     });
     if (!free.length) return;
     const x = free[rnd(free.length)] + rnd(21) - 10;
@@ -436,7 +436,7 @@ window.Game = (function () {
 
     // 托盤
     ctx.fillStyle = 'rgba(0,0,0,0.22)';
-    rrect(ctx, 16, C.tray.topY, core.W - 32, 170, 22); ctx.fill();
+    rrect(ctx, 16, C.tray.topY, core.W - 32, C.tray.h, 22); ctx.fill();
     tray.forEach(function (p) { if (!p.used && !(drag && drag.piece === p)) drawPiece(ctx, p); });
     if (drag) drawPiece(ctx, drag.piece);
 
@@ -464,7 +464,7 @@ window.Game = (function () {
     const mx = G.x + N * CELL / 2, my = G.y + N * CELL / 2;
     if (freezeLeft > 0) {
       ctx.fillStyle = 'rgba(120,200,255,0.18)'; ctx.fillRect(0, 0, C.ui.stripX, WALL_Y);
-      stext(ctx, '❄ 冰凍中　剩 ' + freezeLeft + ' 次', 235, 240, 26, '#bfe8ff');
+      stext(ctx, '❄ 冰凍中　剩 ' + freezeLeft + ' 次', 235, WALL_Y - 14, 26, '#bfe8ff');
     }
     if (bombMode) {
       if (aim) {
@@ -475,21 +475,21 @@ window.Game = (function () {
           rrect(ctx, G.x + cc * CELL + 3, G.y + rr * CELL + 3, CELL - 6, CELL - 6, 9); ctx.fill();
         }
       }
-      stext(ctx, '💣 點一格引爆（再按一次炸彈取消）', mx, G.y + N * CELL + 31, 22, '#ffd29a');
+      stext(ctx, '💣 點一格引爆（再按一次炸彈取消）', 235, WALL_Y - 50, 24, '#ffd29a');
     }
     if (hint) {
-      const w = 410, h = 130, bob = Math.sin(time * 5) * 6;
+      const w = 340, h = 120, bob = Math.sin(time * 5) * 6;
       ctx.fillStyle = 'rgba(0,0,0,0.72)'; rrect(ctx, mx - w / 2, my - h / 2, w, h, 22); ctx.fill();
       ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 4; rrect(ctx, mx - w / 2, my - h / 2, w, h, 22); ctx.stroke();
-      stext(ctx, C.ui.hintText[0], mx, my - 8, 33, '#fff');
-      stext(ctx, C.ui.hintText[1], mx, my + 36, 33, '#ffe27a');
+      stext(ctx, C.ui.hintText[0], mx, my - 8, 30, '#fff');
+      stext(ctx, C.ui.hintText[1], mx, my + 32, 30, '#ffe27a');
       ctx.fillStyle = '#ffd24a'; ctx.beginPath();
       ctx.moveTo(mx - 16, my + h / 2 + 8 + bob); ctx.lineTo(mx + 16, my + h / 2 + 8 + bob); ctx.lineTo(mx, my + h / 2 + 30 + bob); ctx.closePath(); ctx.fill();
     }
     if (lvBanner) {
       const t = lvBanner.t, fade = L.bannerSec;
       const a = t < 0.15 ? t / 0.15 : Math.max(0, 1 - (t - 0.15) / (fade - 0.15));
-      ctx.save(); ctx.globalAlpha = a; ctx.translate(core.W / 2, 118);
+      ctx.save(); ctx.globalAlpha = a; ctx.translate(core.W / 2, 190);
       const sc = 1 + Math.max(0, 0.3 - t) * 1.2; ctx.scale(sc, sc);
       stext(ctx, 'LEVEL ' + lvBanner.n + '！', 0, 0, 64, '#ffe27a');
       ctx.restore();
@@ -547,7 +547,7 @@ window.Game = (function () {
     ctx.restore();
   }
   function drawZone(ctx) {
-    if (ART.bg) { ctx.imageSmoothingEnabled = false; ctx.drawImage(ART.bg, 0, 60, 256, 118, 0, C.zombieZone.top, core.W, WALL_Y - C.zombieZone.top); }
+    if (ART.bg) { ctx.imageSmoothingEnabled = false; ctx.drawImage(ART.bg, 0, 40, 256, 185, 0, C.zombieZone.top, core.W, WALL_Y - C.zombieZone.top); }
     ctx.fillStyle = ART.bg ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.18)';
     ctx.fillRect(0, C.zombieZone.top, core.W, WALL_Y - C.zombieZone.top);
     ctx.fillStyle = 'rgba(0,0,0,0.38)';                                        // 右邊按鈕欄（殭屍不會走到這裡）
