@@ -348,7 +348,30 @@ window.Game = (function () {
   }
 
   // ---------- 殭屍區繪製（先用程式畫，第 4 天換成圖片）----------
+  // ---------- 圖片素材（載入失敗就退回程式畫）----------
+  const ART = {};
+  ['normal', 'fast', 'fat', 'cannon', 'wall', 'bg'].forEach(function (n) {
+    const im = new Image(); im.onload = function () { ART[n] = im; }; im.src = 'assets/' + n + '.png';
+  });
+  const FRAME = { normal: 88, fast: 72, fat: 104 };
+  function drawZombieArt(ctx, z) {
+    const T = Z.types[z.type], im = ART[z.type];
+    if (!im) return false;
+    const f = FRAME[z.type], size = T.r * 4.2, fr = Math.floor(time * 8 + z.ph * 2) % 4;
+    const sq = z.hit > 0 ? 1 + z.hit * 1.2 : 1;
+    ctx.save();
+    ctx.translate(z.x, z.y);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath(); ctx.ellipse(0, 0, T.r * 0.9, T.r * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.translate(0, size * 0.1); ctx.scale(1 / sq, sq);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(im, fr * f, 0, f, f, -size / 2, -size, size, size);
+    if (z.hit > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.min(0.6, z.hit * 3); ctx.drawImage(im, fr * f, 0, f, f, -size / 2, -size, size, size); }
+    ctx.restore();
+    return true;
+  }
   function drawZombie(ctx, z) {
+    if (drawZombieArt(ctx, z)) return;
     const T = Z.types[z.type], r = T.r;
     const bob = Math.sin(time * 8 + z.ph) * 3, sq = z.hit > 0 ? 1 + z.hit * 1.2 : 1;
     ctx.save();
@@ -374,12 +397,13 @@ window.Game = (function () {
     ctx.restore();
   }
   function drawZone(ctx) {
-    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    if (ART.bg) { ctx.imageSmoothingEnabled = false; ctx.drawImage(ART.bg, 0, 60, 256, 118, 0, C.zombieZone.top, core.W, WALL_Y - C.zombieZone.top); }
+    ctx.fillStyle = ART.bg ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.18)';
     ctx.fillRect(0, C.zombieZone.top, core.W, WALL_Y - C.zombieZone.top);
     zombies.slice().sort(function (a, b) { return a.y - b.y; }).forEach(function (z) { drawZombie(ctx, z); });
     // 圍牆
-    ctx.fillStyle = '#8a6a43'; ctx.fillRect(0, WALL_Y, core.W, 14);
-    ctx.fillStyle = '#b28a58'; ctx.fillRect(0, WALL_Y, core.W, 4);
+    if (ART.wall) { ctx.imageSmoothingEnabled = false; for (let i = 0; i < 8; i++) ctx.drawImage(ART.wall, 0, 8, 64, 52, i * 67.5, WALL_Y - 6, 68, 44); }
+    else { ctx.fillStyle = '#8a6a43'; ctx.fillRect(0, WALL_Y, core.W, 14); ctx.fillStyle = '#b28a58'; ctx.fillRect(0, WALL_Y, core.W, 4); }
     if (warning()) {                                                           // 殭屍快到：圍牆閃紅色
       const a = 0.3 + 0.3 * Math.sin(time * 12);
       ctx.fillStyle = 'rgba(255,40,40,' + a + ')'; ctx.fillRect(0, WALL_Y - 4, core.W, 22);
@@ -387,9 +411,12 @@ window.Game = (function () {
     }
     // 砲台（開砲時後座力）
     const cx = C.cannon.x, back = recoil * C.cannon.recoil;
-    ctx.fillStyle = '#3a4650'; rrect(ctx, cx - 14, WALL_Y - 40 + back, 28, 44, 8); ctx.fill();
-    ctx.fillStyle = '#56646f'; rrect(ctx, cx - 10, WALL_Y - 40 + back, 8, 40, 4); ctx.fill();
-    ctx.fillStyle = '#2b333a'; ctx.beginPath(); ctx.arc(cx, WALL_Y + 4, 24, Math.PI, 0); ctx.fill();
+    if (ART.cannon) { ctx.imageSmoothingEnabled = false; ctx.drawImage(ART.cannon, 0, 0, 64, 64, cx - 48, WALL_Y - 84 + back, 96, 96); }
+    else {
+      ctx.fillStyle = '#3a4650'; rrect(ctx, cx - 14, WALL_Y - 40 + back, 28, 44, 8); ctx.fill();
+      ctx.fillStyle = '#56646f'; rrect(ctx, cx - 10, WALL_Y - 40 + back, 8, 40, 4); ctx.fill();
+      ctx.fillStyle = '#2b333a'; ctx.beginPath(); ctx.arc(cx, WALL_Y + 4, 24, Math.PI, 0); ctx.fill();
+    }
     // 砲彈
     balls.forEach(function (b) {
       if (b.t < 0) return;
