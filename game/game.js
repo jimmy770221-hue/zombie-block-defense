@@ -4,6 +4,8 @@ window.Game = (function () {
   const C = window.CONFIG, G = C.grid, CELL = G.cell, N = G.size;
   let core, shapes, totalW;
   let grid, tray, drag, flashes, particles, texts, shake, stuckTimer;
+  let zombies, balls, recoil, revived, ending, sinceSpawn, time;
+  const Z = C.zombies, WALL_Y = C.zombieZone.wallY;
 
   // ---------- 工具 ----------
   function rnd(n) { return Math.floor(Math.random() * n); }
@@ -87,6 +89,76 @@ window.Game = (function () {
 
   function addText(x, y, text, color, size) { texts.push({ x: x, y: y, text: text, color: color, size: size, t: 0 }); }
 
+
+  // ---------- 殭屍 ----------
+  function pickType() {
+    const names = Object.keys(Z.types).filter(function (k) { return score >= Z.types[k].unlockScore; });
+    let tot = 0; names.forEach(function (k) { tot += Z.types[k].weight; });
+    let t = Math.random() * tot;
+    for (let i = 0; i < names.length; i++) { t -= Z.types[names[i]].weight; if (t < 0) return names[i]; }
+    return names[0];
+  }
+  function spawnZombie(type) {
+    if (zombies.length >= Z.max) return;
+    const free = Z.lanes.filter(function (x) {
+      return zombies.every(function (z) { return !(Math.abs(z.x - x) < 60 && z.ty < Z.spawnY + 45); });
+    });
+    if (!free.length) return;
+    const x = free[rnd(free.length)] + rnd(21) - 10;
+    zombies.push({ type: type || pickType(), x: x, ty: Z.spawnY, y: Z.spawnY - 50, hit: 0, pending: 0, ph: Math.random() * 6 });
+  }
+  function stepMult() { return 1 + Math.min(Z.speedMax, score / Z.speedScoreDiv); }
+  function frontZombie() {
+    let f = null;
+    zombies.forEach(function (z) { if (!f || z.ty > f.ty) f = z; });
+    return f;
+  }
+  // 每放一個方塊，殭屍前進一步；到間隔就來新殭屍
+  function advanceZombies() {
+    const m = stepMult();
+    zombies.forEach(function (z) { z.ty += Z.types[z.type].step * m; });
+    sinceSpawn++;
+    const every = Math.max(Z.spawnEveryMin, Z.spawnEveryStart - Math.floor(score / Z.spawnEveryScoreStep));
+    if (sinceSpawn >= every) {
+      sinceSpawn = 0;
+      const cnt = 1 + Math.floor(score / Z.extraEveryScore);
+      for (let i = 0; i < cnt; i++) spawnZombie();
+    }
+  }
+  // 每消除 1 條，砲台打 1 發，擊退最前面的殭屍
+  function fireLines(n) {
+    for (let i = 0; i < n; i++) {
+      const z = frontZombie();
+      if (z) { z.ty = Math.max(Z.spawnY, z.ty - Z.types[z.type].knock); z.pending++; }
+      balls.push({ t: -i * C.cannon.shotGap, z: z, fired: false, x: 0, y: 0 });
+    }
+  }
+  function wallBroken() { return zombies.some(function (z) { return z.ty >= WALL_Y; }); }
+  function warning() { const f = frontZombie(); return !!f && f.ty >= WALL_Y - Z.warnDist; }
+
+  // ---------- 結束與復活 ----------
+  function gameOver(reason) {
+    if (ending) return;
+    ending = true; stuckTimer = -1;
+    const text = reason === 'zombie' ? '殭屍衝破圍牆了！' : '沒有地方可以放方塊了！';
+    function finish() { core.Sfx.play('over'); core.endGame(score, reason); }
+    if (revived) { finish(); return; }
+    core.Sfx.play('over');
+    core.askRevive(text, function () { revived = true; ending = false; doRevive(); }, finish);
+  }
+  function doRevive() {
+    const sz = C.revive.clearSize, off = Math.floor((N - sz) / 2);
+    for (let r = off; r < off + sz; r++) for (let c = off; c < off + sz; c++) {
+      if (grid[r][c]) { flashes.push({ r: r, c: c, color: grid[r][c].color, t: 0 }); grid[r][c] = null; }
+    }
+    zombies.forEach(function (z) { z.ty = Z.spawnY; z.pending = 0; });   // 全部擊退到最上方
+    balls = []; shake = 0.3;
+    core.Sfx.play('clear'); core.buzz(60);
+    addText(core.W / 2, G.y + N * CELL / 2, '復活！', '#9be86b', 64);
+    for (let i = 0; i < 30 && tray.filter(function (p) { return !p.used; }).every(function (p) { return !anyFit(p.shape); }); i++) newTray();
+    checkStuck();
+  }
+
   function place(piece, r, c) {
     piece.used = true;
     const cells = piece.shape.cells;
@@ -122,9 +194,13 @@ window.Game = (function () {
     }
     score += gain;
     core.setScore(score);
+    if (n > 0) fireLines(n);          // 先砲擊擊退
+    advanceZombies();                 // 再前進一步
+    if (warning()) core.Sfx.play('warn');
 
     // 3 個都放完才補新的 3 個
     if (tray.every(function (p) { return p.used; })) newTray();
+    if (wallBroken()) { gameOver('zombie'); return; }
     checkStuck();
   }
   function checkStuck() {
@@ -136,12 +212,41 @@ window.Game = (function () {
   function start() {
     grid = []; for (let i = 0; i < N; i++) grid.push(new Array(N).fill(null));
     score = 0; drag = null; flashes = []; particles = []; texts = []; shake = 0; stuckTimer = -1;
+    zombies = []; balls = []; recoil = 0; revived = false; ending = false; sinceSpawn = 0; time = 0;
+    for (let i = 0; i < Z.start; i++) spawnZombie();
     newTray();
     checkStuck();
   }
   let score = 0;
 
   function update(dt) {
+    time += dt;
+    // 殭屍平滑移動（被砲彈打中前先停住，打中後彈回去）
+    zombies.forEach(function (z) {
+      if (z.hit > 0) z.hit -= dt;
+      if (z.pending > 0) return;
+      z.y += (z.ty - z.y) * (1 - Math.exp(-dt * (z.y > z.ty ? 14 : 8)));
+    });
+    // 砲彈
+    for (let i = balls.length - 1; i >= 0; i--) {
+      const b = balls[i]; b.t += dt;
+      if (b.t < 0) continue;
+      if (!b.fired) { b.fired = true; recoil = 1; core.Sfx.play('shoot'); core.buzz(15); }
+      const tx = b.z ? b.z.x : C.cannon.x, ty = b.z ? b.z.y - Z.types[b.z.type].r : 100;
+      const p = Math.min(1, b.t / C.cannon.flight);
+      b.x = C.cannon.x + (tx - C.cannon.x) * p; b.y = (WALL_Y - 30) + (ty - (WALL_Y - 30)) * p;
+      if (p >= 1) {
+        if (b.z) {
+          b.z.pending = Math.max(0, b.z.pending - 1); b.z.hit = 0.2; core.Sfx.play('hit');
+          for (let k = 0; k < 8; k++) {
+            const a = Math.random() * Math.PI * 2, v = 100 + Math.random() * 160;
+            particles.push({ x: tx, y: ty, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 60, t: 0, life: 0.35, css: '#fff3a0', s: 7 });
+          }
+        }
+        balls.splice(i, 1);
+      }
+    }
+    if (recoil > 0) recoil = Math.max(0, recoil - dt * 6);
     // 方塊平滑移動（拖曳中跟著手指，放開後彈回托盤）
     tray.forEach(function (p) {
       if (p.used) return;
@@ -171,7 +276,7 @@ window.Game = (function () {
     if (shake > 0) shake = Math.max(0, shake - dt);
     if (stuckTimer >= 0 && !drag) {                         // 托盤上的方塊都放不下
       stuckTimer -= dt;
-      if (stuckTimer < 0) { stuckTimer = -1; core.Sfx.play('over'); core.endGame(score, 'no_space'); }
+      if (stuckTimer < 0) { stuckTimer = -1; gameOver('no_space'); }
     }
   }
 
@@ -179,10 +284,7 @@ window.Game = (function () {
     ctx.save();
     if (shake > 0) ctx.translate((Math.random() - 0.5) * 8 * (shake / 0.25), (Math.random() - 0.5) * 8 * (shake / 0.25));
 
-    // 殭屍區（第 3 天放殭屍）與圍牆線
-    ctx.fillStyle = 'rgba(0,0,0,0.18)';
-    ctx.fillRect(0, C.zombieZone.top, core.W, C.zombieZone.wallY - C.zombieZone.top);
-    ctx.fillStyle = '#8a6a43'; ctx.fillRect(0, C.zombieZone.wallY, core.W, 10);
+    drawZone(ctx);
 
     // 格子底板
     ctx.fillStyle = '#10201a';
@@ -222,7 +324,7 @@ window.Game = (function () {
     // 碎片
     particles.forEach(function (p) {
       ctx.globalAlpha = Math.max(0, 1 - p.t / p.life);
-      ctx.fillStyle = C.colors[p.color];
+      ctx.fillStyle = p.css || C.colors[p.color];
       ctx.fillRect(p.x - p.s / 2, p.y - p.s / 2, p.s, p.s);
     });
     ctx.globalAlpha = 1;
@@ -244,6 +346,58 @@ window.Game = (function () {
     ctx.globalAlpha = 1;
     ctx.restore();
   }
+
+  // ---------- 殭屍區繪製（先用程式畫，第 4 天換成圖片）----------
+  function drawZombie(ctx, z) {
+    const T = Z.types[z.type], r = T.r;
+    const bob = Math.sin(time * 8 + z.ph) * 3, sq = z.hit > 0 ? 1 + z.hit * 1.2 : 1;
+    ctx.save();
+    ctx.translate(z.x, z.y);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.9, r * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.translate(0, -r + bob); ctx.scale(1 / sq, sq);
+    const swing = Math.sin(time * 8 + z.ph) * r * 0.2;
+    ctx.fillStyle = shade(T.color, -0.2);                                      // 手
+    ctx.beginPath(); ctx.arc(-r * 0.98, -r * 0.1 + swing, r * 0.27, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(r * 0.98, -r * 0.1 - swing, r * 0.27, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = T.color; ctx.strokeStyle = shade(T.color, -0.45); ctx.lineWidth = 3;   // 圓滾滾身體
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.beginPath(); ctx.ellipse(-r * 0.3, -r * 0.55, r * 0.35, r * 0.2, -0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff';                                                    // 眼睛
+    ctx.beginPath(); ctx.arc(-r * 0.36, -r * 0.2, r * 0.27, 0, Math.PI * 2); ctx.arc(r * 0.36, -r * 0.2, r * 0.27, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); ctx.arc(-r * 0.32, -r * 0.16, r * 0.11, 0, Math.PI * 2); ctx.arc(r * 0.4, -r * 0.16, r * 0.11, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#2a4a2a'; ctx.lineWidth = 3; ctx.lineCap = 'round';     // 嘴
+    ctx.beginPath(); ctx.arc(0, r * 0.28, r * 0.22, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+    if (z.hit > 0) { ctx.fillStyle = 'rgba(255,255,255,' + Math.min(0.8, z.hit * 4) + ')'; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+  }
+  function drawZone(ctx) {
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillRect(0, C.zombieZone.top, core.W, WALL_Y - C.zombieZone.top);
+    zombies.slice().sort(function (a, b) { return a.y - b.y; }).forEach(function (z) { drawZombie(ctx, z); });
+    // 圍牆
+    ctx.fillStyle = '#8a6a43'; ctx.fillRect(0, WALL_Y, core.W, 14);
+    ctx.fillStyle = '#b28a58'; ctx.fillRect(0, WALL_Y, core.W, 4);
+    if (warning()) {                                                           // 殭屍快到：圍牆閃紅色
+      const a = 0.3 + 0.3 * Math.sin(time * 12);
+      ctx.fillStyle = 'rgba(255,40,40,' + a + ')'; ctx.fillRect(0, WALL_Y - 4, core.W, 22);
+      ctx.fillStyle = 'rgba(255,40,40,' + (a * 0.25) + ')'; ctx.fillRect(0, C.zombieZone.top, core.W, WALL_Y - C.zombieZone.top);
+    }
+    // 砲台（開砲時後座力）
+    const cx = C.cannon.x, back = recoil * C.cannon.recoil;
+    ctx.fillStyle = '#3a4650'; rrect(ctx, cx - 14, WALL_Y - 40 + back, 28, 44, 8); ctx.fill();
+    ctx.fillStyle = '#56646f'; rrect(ctx, cx - 10, WALL_Y - 40 + back, 8, 40, 4); ctx.fill();
+    ctx.fillStyle = '#2b333a'; ctx.beginPath(); ctx.arc(cx, WALL_Y + 4, 24, Math.PI, 0); ctx.fill();
+    // 砲彈
+    balls.forEach(function (b) {
+      if (b.t < 0) return;
+      ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(b.x, b.y, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffd24a'; ctx.beginPath(); ctx.arc(b.x - 3, b.y - 3, 4, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+
   function drawPiece(ctx, p) {
     const s = p.s, left = p.cx - p.shape.w * s / 2, top = p.cy - p.shape.h * s / 2;
     p.shape.cells.forEach(function (c) { block(ctx, left + c[1] * s, top + c[0] * s, s, p.color); });
@@ -283,6 +437,11 @@ window.Game = (function () {
       grid: function () { return grid; }, tray: function () { return tray; },
       setTray: function (list) { tray = list.map(function (m, i) { return makePiece(i, parse(m), i % C.colors.length); }); checkStuck(); },
       setGrid: function (fn) { fn(grid); },
+      place: function (i, r, c) { const p = tray[i]; if (!p || p.used || !canPlace(p.shape, r, c)) return false; place(p, r, c); return true; },
+      canPlace: function (i, r, c) { const p = tray[i]; return !!p && !p.used && canPlace(p.shape, r, c); },
+      zombies: function () { return zombies; },
+      info: function () { return { revived: revived, ending: ending, score: score }; },
+      setZombies: function (list) { zombies = []; list.forEach(function (o) { spawnZombie(o.type); const z = zombies[zombies.length - 1]; z.ty = o.ty; z.y = o.ty; }); },
       geom: function () { return { G: G, CELL: CELL, tray: C.tray, liftY: C.drag.liftY }; }
     }
   };

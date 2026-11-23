@@ -26,6 +26,33 @@ window.CONFIG = {
   zombieZone: { top: 0, wallY: 250 },           // 殭屍區在最上方，圍牆在 y=250
   tray: { y: 850, slotX: [90, 270, 450], maxCell: 34, slotW: 160, topY: 772 },
 
+  // ===== 殭屍（每放一個方塊，殭屍前進一步）=====
+  zombies: {
+    spawnY: 125,              // 殭屍出生位置（腳底 y）
+    warnDist: 50,             // 離圍牆多近就開始閃紅色警告
+    start: 2,                 // 開局幾隻
+    max: 9,                   // 畫面上最多幾隻
+    lanes: [70, 150, 230, 310, 390, 470],   // 殭屍出現的左右位置
+    spawnEveryStart: 8,       // 每放幾個方塊來新殭屍（開局）
+    spawnEveryMin: 5,         // 最快每幾個方塊來新殭屍
+    spawnEveryScoreStep: 200, // 每多少分，間隔少 1
+    extraEveryScore: 400,     // 每多少分，每次多來 1 隻
+    speedScoreDiv: 500,       // 前進距離倍率 = 1 + 分數÷這個數
+    speedMax: 0.6,            // 前進倍率最多加到 +60%
+    // step＝每放一個方塊前進幾像素；knock＝被砲彈打中往後退幾像素
+    types: {
+      normal: { r: 26, step: 6, knock: 75, unlockScore: 0,  weight: 6, color: '#7ed957' },
+      fat:    { r: 34, step: 4,  knock: 45, unlockScore: 80, weight: 2, color: '#5fbf45' },
+      fast:   { r: 21, step: 11, knock: 75, unlockScore: 40, weight: 2, color: '#a6ee6a' }
+    }
+  },
+
+  // ===== 砲台 =====
+  cannon: { x: 270, shotGap: 0.14, flight: 0.2, recoil: 16 },
+
+  // ===== 復活 =====
+  revive: { clearSize: 4 },    // 清空格子正中央 4×4
+
   // ===== 手感 =====
   drag: { liftY: 130 },       // 拖曳時方塊浮在手指上方多少，避免被手指擋住
 

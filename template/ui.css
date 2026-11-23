@@ -53,6 +53,7 @@ body {
 .new-best { color: #ff7a7a; font-size: 30px; font-weight: 900; }
 
 /* 模擬廣告 */
+#scr-revive { z-index: 30; }
 #scr-ad { background: #14181f; z-index: 50; }
 .ad-tag { font-size: 38px; font-weight: 900; color: #ffd24a; border: 3px dashed #ffd24a; padding: 14px 26px; border-radius: 16px; }
 .ad-text { font-size: 28px; color: #cfd8e3; }

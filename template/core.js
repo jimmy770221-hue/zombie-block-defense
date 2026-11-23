@@ -151,6 +151,12 @@
       '<button class="btn gold" id="btn-double">看廣告　金幣加倍</button>' +
       '<button class="btn" id="btn-again">再玩一次</button>' +
     '</div>' +
+    '<div id="scr-revive" class="screen hidden">' +
+      '<div class="h2">遊戲結束</div>' +
+      '<div class="row" id="rv-text"></div>' +
+      '<button class="btn gold" id="btn-revive">看廣告　復活</button>' +
+      '<button class="btn gray" id="btn-norevive">不用了</button>' +
+    '</div>' +
     '<div id="scr-ad" class="screen hidden">' +
       '<div class="ad-tag">測試用模擬廣告</div>' +
       '<div class="ad-text" id="ad-text"></div>' +
@@ -167,7 +173,7 @@
     '</div>';
   while (ui.firstChild) stage.appendChild(ui.firstChild);
   const $ = function (id) { return document.getElementById(id); };
-  const screens = ['scr-start', 'scr-pause', 'scr-over', 'scr-stats'];
+  const screens = ['scr-start', 'scr-pause', 'scr-over', 'scr-stats', 'scr-revive'];
   function show(id) { $(id).classList.remove('hidden'); }
   function hide(id) { $(id).classList.add('hidden'); }
   function showOnly(id) { screens.forEach(hide); if (id) show(id); }
@@ -249,6 +255,18 @@
     $('o-total').textContent = Save.get('coins');
     if (isNew !== undefined) $('o-new').classList.toggle('hidden', !isNew);
     $('btn-double').classList.toggle('hidden', roundCoins <= 0 || doubled);
+  }
+
+  // 結束前先問一次「看廣告復活」（要不要問由遊戲自己決定；每局只問一次也由遊戲控制）
+  function askRevive(text, onYes, onNo) {
+    if (state !== 'play') return;
+    paused = true;                                  // 凍結遊戲，但不顯示暫停畫面
+    $('rv-text').textContent = text || '';
+    showOnly('scr-revive');
+    $('btn-revive').onclick = function () {
+      Ads.rewarded('看廣告復活', function () { paused = false; showOnly(null); if (onYes) onYes(); });
+    };
+    $('btn-norevive').onclick = function () { paused = false; showOnly(null); if (onNo) onNo(); };
   }
 
   function pauseGame() {
@@ -398,7 +416,7 @@
 
   const Core = {
     W: W, H: H, ctx: ctx, config: C,
-    boot: boot, endGame: function (s, r) { endGame(s, r); }, setScore: setScore,
+    boot: boot, askRevive: askRevive, endGame: function (s, r) { endGame(s, r); }, setScore: setScore,
     isPlaying: function () { return state === 'play' && !paused && !Ads.active; },
     Save: Save, Sfx: Sfx, Ads: Ads, track: track, buzz: buzz,
     _stats: statsData, _log: function () { return log; }
