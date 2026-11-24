@@ -23,27 +23,27 @@ window.CONFIG = {
   maxLogs: 500,               // 最多保留幾筆紀錄
 
   // ===== 格子與版面（邏輯座標 540×960）=====
-  grid: { size: 8, cell: 44, x: 94, y: 464 },   // 8×8，每格 44
-  zombieZone: { top: 0, wallY: 430 },           // 殭屍區在最上方（約畫面 45%），圍牆在 y=430
-  tray: { y: 884, slotX: [68, 169, 270, 371, 472], maxCell: 26, slotW: 100, topY: 828, h: 112, guaranteeFit: 2 },   // 一次 5 塊；補牌時至少 2 塊現在放得下
+  grid: { size: 8, cell: 30, x: 150, y: 592 },   // 8×8，每格 44
+  zombieZone: { top: 0, wallY: 540 },           // 殭屍區在最上方（約畫面 45%），圍牆在 y=540，棋盤在圍牆下方（上下 6:4）
+  tray: { y: 896, slotX: [68, 169, 270, 371, 472], maxCell: 28, slotW: 100, topY: 844, h: 108, guaranteeFit: 2 },   // 一次 5 塊；補牌時至少 2 塊現在放得下
 
   // ===== 殭屍（每放一個方塊，殭屍前進一步）=====
   zombies: {
     spawnY: 150,              // 殭屍出生位置（腳底 y）
-    warnDist: 112,             // 離圍牆多近就開始閃紅色警告
+    warnDist: 156,             // 離圍牆多近就開始閃紅色警告
     start: 2,                 // 開局幾隻
     max: 9,                   // 畫面上最多幾隻
     depthFar: 0.72,           // 景深：最上方（遠）的殭屍畫成幾倍大
     depthNear: 1.12,          // 景深：貼著圍牆（近）的殭屍畫成幾倍大
     depthFog: 0.7,            // 最遠處的透明度（越遠越淡，像隔著霧）
-    spawnGap: 100,             // 同一路上，前一隻要走出這麼遠，後面才會再出
+    spawnGap: 139,             // 同一路上，前一隻要走出這麼遠，後面才會再出
     lanes: [120, 180, 240, 300, 360, 420],  // 殭屍出現的左右位置（以畫面中線 270 為中心，貼牆時的間隔；右邊留給按鈕欄）
     laneNarrow: 0.45,         // 景深：最遠處賽道間隔只剩這個比例（沿著遠處的路收攏），越近越展開
     // step＝每放一個方塊前進幾像素；knock＝被砲彈打中往後退幾像素
     types: {
-      normal: { r: 26, step: 13.4, knock: 168, unlockLevel: 1, weight: 6, color: '#7ed957' },
-      fat:    { r: 34, step: 9, knock: 100, unlockLevel: 5, weight: 2, color: '#5fbf45' },
-      fast:   { r: 21, step: 24.5, knock: 168, unlockLevel: 3, weight: 2, color: '#a6ee6a' }
+      normal: { r: 26, step: 18.6, knock: 234, unlockLevel: 1, weight: 6, color: '#7ed957' },
+      fat:    { r: 34, step: 12.5, knock: 139, unlockLevel: 5, weight: 2, color: '#5fbf45' },
+      fast:   { r: 21, step: 34.1, knock: 234, unlockLevel: 3, weight: 2, color: '#a6ee6a' }
     }
   },
 
@@ -58,7 +58,7 @@ window.CONFIG = {
     lateFrom: 15,
     waveEvery: 5,             // 每幾級（5、10、15…）一次多來幾隻
     waveExtra: 2,
-    knockback: 134,            // 升級獎勵：所有殭屍往後退幾像素
+    knockback: 187,            // 升級獎勵：所有殭屍往後退幾像素
     bannerSec: 1.2,           // 「LEVEL N！」顯示秒數
     bigCells: 5,              // 幾格以上算大方塊（難放）
     bigBoostPerLevel: 0.1,    // 大方塊／難放方塊的機率，每級多 10%
