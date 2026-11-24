@@ -212,6 +212,7 @@
       '</div>' +
       '<button class="btn gold" id="btn-double">看廣告　金幣加倍</button>' +
       '<button class="btn" id="btn-again">再玩一次</button>' +
+      '<button class="btn gray" id="btn-over-home">回主選單</button>' +
     '</div>' +
     '<div id="scr-revive" class="screen hidden">' +
       '<div class="h2">遊戲結束</div>' +
@@ -583,6 +584,7 @@
     $('btn-restart').onclick = function () { leaveRound('restart'); hide('scr-pause'); startRound(); };
     $('btn-home').onclick = function () { leaveRound('quit'); state = 'start'; paused = false; hide('hud'); refreshStart(); showOnly('scr-start'); };
     $('btn-again').onclick = function () { Sfx.play('click'); startRound(); };
+    $('btn-over-home').onclick = function () { Sfx.play('click'); state = 'start'; paused = false; hide('hud'); refreshStart(); showOnly('scr-start'); };
     $('btn-shop').onclick = function () { Sfx.play('click'); openShop(); };
     $('btn-board').onclick = function () { Sfx.play('click'); openBoard(); };
     $('btn-shop-close').onclick = function () { Sfx.play('click'); refreshStart(); showOnly('scr-start'); };
