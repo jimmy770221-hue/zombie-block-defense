@@ -175,12 +175,18 @@
   const stage = document.getElementById('stage');
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
+  // 美術圖片：全部載入成功才套用（body 加 art），任何一張缺就整套退回舊的程式畫法
+  function artSrc(n) { return 'assets/' + n + '.png?v=' + (C.assetVer || ''); }
+  function artImg(n, cls, alt) { return '<img class="ic ' + (cls || '') + '" src="' + artSrc(n) + '" alt="' + (alt || '') + '" draggable="false">'; }
+  const ART_FILES = ['home_bg', 'shop_bg', 'title', 'btn_green', 'btn_green_down', 'btn_gold', 'btn_gold_down', 'btn_gray', 'btn_gray_down', 'card_item', 'coin',
+    'icon_pause', 'icon_gear', 'icon_sound_on', 'icon_sound_off', 'icon_music_on', 'icon_music_off', 'icon_vibrate_on', 'icon_vibrate_off',
+    'icon_bomb', 'icon_shuffle', 'icon_freeze', 'icon_candy', 'item_frame', 'item_frame_off'];
   const ui = document.createElement('div');
   ui.innerHTML =
     '<div id="hud" class="hidden">' +
       '<div id="hud-left"><div id="hud-score">0</div><div id="hud-best">最高 0</div>' +
         '<div id="hud-lv"><span id="hud-lvtxt">Lv 1</span><div class="lvbar"><i id="hud-lvfill"></i></div></div></div>' +
-      '<button id="btn-pause">❚❚</button>' +
+      '<button id="btn-pause" aria-label="暫停"><span class="emo">❚❚</span>' + artImg('icon_pause') + '</button>' +
     '</div>' +
     '<div id="scr-start" class="screen">' +
       '<div id="st-bg"></div>' +
@@ -196,7 +202,7 @@
         '<button class="btn gray half" id="btn-shop">🛒 商店</button>' +
         '<button class="btn gray half" id="btn-board">🏆 排行榜</button>' +
       '</div>' +
-      '<button class="btn gray small" id="btn-set">⚙ 設定</button>' +
+      '<button class="btn gray small" id="btn-set" aria-label="設定"><span class="emo">⚙ </span>' + artImg('icon_gear') + '設定</button>' +
       '<div id="ver"></div>' +
     '</div>' +
     '<div id="scr-set" class="screen hidden">' +
@@ -208,7 +214,7 @@
     '</div>' +
     '<div id="scr-shop" class="screen hidden">' +
       '<div class="h2">商店</div>' +
-      '<div class="row">金幣　<b id="sh-coins">0</b></div>' +
+      '<div class="row">金幣　' + artImg('coin', 'coin big') + '<b id="sh-coins">0</b></div>' +
       '<div id="sh-list"></div>' +
       '<button class="btn gray" id="btn-shop-close">返回</button>' +
     '</div>' +
@@ -221,7 +227,7 @@
       '<div class="h2">暫停中</div>' +
       '<button class="btn" id="btn-resume">繼續</button>' +
       '<button class="btn gray" id="btn-restart">重新開始</button>' +
-      '<button class="btn gray" id="btn-pause-set">⚙ 設定</button>' +
+      '<button class="btn gray" id="btn-pause-set" aria-label="設定"><span class="emo">⚙ </span>' + artImg('icon_gear') + '設定</button>' +
       '<button class="btn gray" id="btn-home">回開始畫面</button>' +
     '</div>' +
     '<div id="scr-over" class="screen hidden">' +
@@ -460,9 +466,11 @@
   function renderShop() {
     $('sh-coins').textContent = Save.get('coins');
     const list = $('sh-list'); list.textContent = '';
-    function row(icon, name, desc, right) {
+    function row(icon, name, desc, right, img) {
       const r = document.createElement('div'); r.className = 'sh-row';
-      const i = document.createElement('div'); i.className = 'sh-ic'; i.textContent = icon;
+      const i = document.createElement('div'); i.className = 'sh-ic';
+      const em = document.createElement('span'); em.className = 'emo'; em.textContent = icon; i.appendChild(em);
+      if (img) i.insertAdjacentHTML('beforeend', artImg(img, '', name));
       const m = document.createElement('div'); m.className = 'sh-mid';
       const n = document.createElement('b'); n.textContent = name;
       const d = document.createElement('small'); d.textContent = desc;
@@ -472,20 +480,25 @@
     function btn(text, cls, off, fn) {
       const b = document.createElement('button'); b.className = 'btn small ' + cls; b.textContent = text; b.disabled = !!off; b.onclick = fn; return b;
     }
+    function priceBtn(price, off, fn) {            // 金幣價格鈕：金幣圖示＋數字
+      const b = document.createElement('button'); b.className = 'btn small gold'; b.disabled = !!off; b.onclick = fn;
+      b.innerHTML = '<span class="emo">💰</span>' + artImg('coin', 'coin');
+      b.appendChild(document.createTextNode(String(price))); return b;
+    }
     C.shop.items.forEach(function (it) {
       const coins = Save.get('coins');
       if (it.kind === 'item') {
         const w = document.createElement('div'); w.className = 'sh-r';
         const own = document.createElement('span'); own.textContent = '擁有 ' + Items.count(it.id);
         w.appendChild(own);
-        w.appendChild(btn('💰' + it.price, 'gold', coins < it.price, function () { buy(it); }));
-        row(it.icon, it.name, it.desc, w);
+        w.appendChild(priceBtn(it.price, coins < it.price, function () { buy(it); }));
+        row(it.icon, it.name, it.desc, w, it.img);
       } else {
         const owned = Save.get('ownedThemes').indexOf(it.id) >= 0;
         const w = document.createElement('div'); w.className = 'sh-r';
-        if (!owned) w.appendChild(btn('💰' + it.price, 'gold', coins < it.price, function () { buy(it); }));
+        if (!owned) w.appendChild(priceBtn(it.price, coins < it.price, function () { buy(it); }));
         else w.appendChild(btn(Save.get('theme') === it.id ? '使用中' : '使用', Save.get('theme') === it.id ? 'gray' : '', Save.get('theme') === it.id, function () { Save.set('theme', it.id); Sfx.play('click'); renderShop(); }));
-        row(it.icon, it.name, it.desc, w);
+        row(it.icon, it.name, it.desc, w, it.img);
       }
     });
     // 預設主題（永遠擁有，可以切回來）
@@ -602,13 +615,19 @@
 
   // ================= 啟動 =================
   function boot() {
-    $('t-title').textContent = C.title;
+    $('t-title').textContent = C.title; $('t-title').setAttribute('role', 'img'); $('t-title').setAttribute('aria-label', C.title);
+    let artLeft = ART_FILES.length;
+    ART_FILES.forEach(function (n) { const im = new Image(); im.onload = function () { if (--artLeft === 0) document.body.classList.add('art'); }; im.src = artSrc(n); });
     $('ver').textContent = 'v' + C.version;
     document.title = C.title;
     const refreshSound = function () {
-      $('btn-sound').textContent = Save.get('sound') ? '音效：開' : '音效：關';
-      $('btn-music').textContent = Save.get('music') ? '音樂：開' : '音樂：關';
-      $('btn-vib').textContent = Save.get('vibrate') ? '震動：開' : '震動：關';
+      function tg(id, key, name, ic) {
+        const on = !!Save.get(key), b = $(id);
+        b.innerHTML = artImg(ic + (on ? '_on' : '_off'), 'tg');
+        b.appendChild(document.createTextNode(name + (on ? '：開' : '：關')));
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      }
+      tg('btn-sound', 'sound', '音效', 'icon_sound'); tg('btn-music', 'music', '音樂', 'icon_music'); tg('btn-vib', 'vibrate', '震動', 'icon_vibrate');
     };
     let setFrom = 'scr-start';
     const openSet = function (from) { setFrom = from; refreshSound(); showOnly('scr-set'); };

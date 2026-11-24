@@ -34,6 +34,16 @@ window.Game = (function () {
     ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
   }
+  // 九宮格拉伸：四個角不變形，邊與中間拉長（托盤底框用）
+  function slice9(ctx, im, x, y, w, h, m) {
+    const iw = im.width, ih = im.height, mw = iw - m * 2, mh = ih - m * 2;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(im, 0, 0, m, m, x, y, m, m); ctx.drawImage(im, iw - m, 0, m, m, x + w - m, y, m, m);
+    ctx.drawImage(im, 0, ih - m, m, m, x, y + h - m, m, m); ctx.drawImage(im, iw - m, ih - m, m, m, x + w - m, y + h - m, m, m);
+    ctx.drawImage(im, m, 0, mw, m, x + m, y, w - m * 2, m); ctx.drawImage(im, m, ih - m, mw, m, x + m, y + h - m, w - m * 2, m);
+    ctx.drawImage(im, 0, m, m, mh, x, y + m, m, h - m * 2); ctx.drawImage(im, iw - m, m, m, mh, x + w - m, y + m, m, h - m * 2);
+    ctx.drawImage(im, m, m, mw, mh, x + m, y + m, w - m * 2, h - m * 2);
+  }
   // 圓角方塊：有亮面和陰影，不用圖片
   function candyBlock(ctx, x, y, s, base, alpha) {
     const pad = s * 0.05;
@@ -486,13 +496,19 @@ window.Game = (function () {
     drawZone(ctx);
 
     // 格子底板
-    ctx.fillStyle = '#66574a';
-    rrect(ctx, G.x - 13, G.y - 13, N * CELL + 26, N * CELL + 26, 18); ctx.fill();
-    ctx.fillStyle = '#332b26';
-    rrect(ctx, G.x - 10, G.y - 10, N * CELL + 20, N * CELL + 20, 18); ctx.fill();
-    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
-      ctx.fillStyle = '#1c3328';
-      rrect(ctx, G.x + j * CELL + 2, G.y + i * CELL + 2, CELL - 4, CELL - 4, 8); ctx.fill();
+    if (ART.board_frame && ART.cell_empty) {                                  // 美術：空格 8×8 ＋ 外框（中間 240×240 鏤空）
+      ctx.imageSmoothingEnabled = false;
+      for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) ctx.drawImage(ART.cell_empty, G.x + j * CELL, G.y + i * CELL, CELL, CELL);
+      ctx.drawImage(ART.board_frame, G.x - 13, G.y - 13, N * CELL + 26, N * CELL + 26);
+    } else {
+      ctx.fillStyle = '#66574a';
+      rrect(ctx, G.x - 13, G.y - 13, N * CELL + 26, N * CELL + 26, 18); ctx.fill();
+      ctx.fillStyle = '#332b26';
+      rrect(ctx, G.x - 10, G.y - 10, N * CELL + 20, N * CELL + 20, 18); ctx.fill();
+      for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+        ctx.fillStyle = '#1c3328';
+        rrect(ctx, G.x + j * CELL + 2, G.y + i * CELL + 2, CELL - 4, CELL - 4, 8); ctx.fill();
+      }
     }
     // 預覽陰影
     let ghost = null;
@@ -538,8 +554,8 @@ window.Game = (function () {
     ctx.globalAlpha = 1;
 
     // 托盤
-    ctx.fillStyle = 'rgba(0,0,0,0.22)';
-    rrect(ctx, 16, C.tray.topY, core.W - 32, C.tray.h, 22); ctx.fill();
+    if (ART.tray_panel) slice9(ctx, ART.tray_panel, 16, C.tray.topY, core.W - 32, C.tray.h, 20);
+    else { ctx.fillStyle = 'rgba(0,0,0,0.22)'; rrect(ctx, 16, C.tray.topY, core.W - 32, C.tray.h, 22); ctx.fill(); }
     tray.forEach(function (p) { if (!p.used && !(drag && drag.piece === p)) drawPiece(ctx, p); });
     if (drag) drawPiece(ctx, drag.piece);
 
@@ -614,8 +630,8 @@ window.Game = (function () {
   // ---------- 殭屍區繪製（先用程式畫，第 4 天換成圖片）----------
   // ---------- 圖片素材（載入失敗就退回程式畫）----------
   const ART = {};
-  ['normal', 'fast', 'fat', 'arrow', 'cannon', 'mg', 'wall', 'bg'].forEach(function (n) {
-    const im = new Image(); im.onload = function () { ART[n] = im; }; im.src = 'assets/' + n + '.png?v=' + C.version;
+  ['normal', 'fast', 'fat', 'arrow', 'cannon', 'mg', 'wall', 'bg', 'board_frame', 'cell_empty', 'tray_panel'].forEach(function (n) {
+    const im = new Image(); im.onload = function () { ART[n] = im; }; im.src = 'assets/' + n + '.png?v=' + C.assetVer;
   });
   const FRAME = { normal: 88, fast: 72, fat: 104 };
   // 景深：越靠近圍牆（y 越大）殭屍畫得越大、越清楚；只影響畫面，不影響遊戲邏輯
@@ -834,7 +850,9 @@ window.Game = (function () {
     // 道具按鈕（右邊一欄，不蓋格子和托盤）
     const box = document.createElement('div'); box.id = 'hud-items';
     SH.items.filter(function (it) { return it.kind === 'item'; }).forEach(function (it) {
-      const b = document.createElement('button'); b.className = 'itbtn'; b.textContent = it.icon;
+      const b = document.createElement('button'); b.className = 'itbtn'; b.setAttribute('aria-label', it.name);
+      const em = document.createElement('span'); em.className = 'emo'; em.textContent = it.icon; b.appendChild(em);
+      if (it.img) { const im = document.createElement('img'); im.className = 'ic'; im.alt = ''; im.draggable = false; im.src = 'assets/' + it.img + '.png?v=' + C.assetVer; b.appendChild(im); }
       b.appendChild(document.createElement('i'));
       b.onclick = function () { useItem(it.id); };
       itemBtns[it.id] = b; box.appendChild(b);

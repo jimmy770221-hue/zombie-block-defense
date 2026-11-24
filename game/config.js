@@ -1,6 +1,6 @@
 // 所有數值都放在這裡，想調整就改這個檔
 window.CONFIG = {
-  version: '20261124a',   // 每次更新資產／程式就換一個，瀏覽器才不會抓到舊檔
+  assetVer: '20261125a',   // 每次更新資產／程式就換一個，瀏覽器才不會抓到舊檔
 
   // ===== 基本 =====
   title: '殭屍防線',
@@ -78,10 +78,10 @@ window.CONFIG = {
   // ===== 商店（只用金幣）=====
   shop: {
     items: [
-      { id: 'bomb',    kind: 'item',  icon: '💣', name: '炸彈',       price: 50,  desc: '點一格，清掉周圍 3×3（不計分）' },
-      { id: 'shuffle', kind: 'item',  icon: '🔀', name: '換一組方塊', price: 30,  desc: '重抽托盤上還沒用的方塊' },
-      { id: 'freeze',  kind: 'item',  icon: '❄️', name: '冰凍',       price: 40,  desc: '接下來放 3 個方塊，殭屍不前進、不出新殭屍' },
-      { id: 'candy',   kind: 'theme', icon: '🍬', name: '糖果方塊',   price: 500, desc: '把方塊換成糖果風格' }
+      { id: 'bomb',    img: 'icon_bomb', kind: 'item',  icon: '💣', name: '炸彈',       price: 50,  desc: '點一格，清掉周圍 3×3（不計分）' },
+      { id: 'shuffle', img: 'icon_shuffle', kind: 'item',  icon: '🔀', name: '換一組方塊', price: 30,  desc: '重抽托盤上還沒用的方塊' },
+      { id: 'freeze',  img: 'icon_freeze', kind: 'item',  icon: '❄️', name: '冰凍',       price: 40,  desc: '接下來放 3 個方塊，殭屍不前進、不出新殭屍' },
+      { id: 'candy',   img: 'icon_candy', kind: 'theme', icon: '🍬', name: '糖果方塊',   price: 500, desc: '把方塊換成糖果風格' }
     ],
     bombSize: 1,              // 炸彈範圍：中心往外 1 格 = 3×3
     freezePlacements: 3       // 冰凍持續幾次放置
