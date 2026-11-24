@@ -1,6 +1,6 @@
 // 所有數值都放在這裡，想調整就改這個檔
 window.CONFIG = {
-  assetVer: '20261125a',   // 每次更新資產／程式就換一個，瀏覽器才不會抓到舊檔
+  assetVer: '20261125b',   // 每次更新資產／程式就換一個，瀏覽器才不會抓到舊檔
 
   // ===== 基本 =====
   title: '殭屍防線',
@@ -45,7 +45,8 @@ window.CONFIG = {
     types: {
       normal: { hp: 2, rewardScore: 5, rewardCoins: 1, r: 26, step: 18.6, knock: 234, unlockLevel: 1, weight: 6, color: '#7ed957' },
       fat:    { hp: 5, rewardScore: 15, rewardCoins: 3, r: 34, step: 12.5, knock: 139, unlockLevel: 5, weight: 2, color: '#5fbf45' },
-      fast:   { hp: 1, rewardScore: 8, rewardCoins: 1, r: 21, step: 34.1, knock: 234, unlockLevel: 3, weight: 2, color: '#a6ee6a' }
+      fast:   { hp: 1, rewardScore: 8, rewardCoins: 1, r: 21, step: 34.1, knock: 234, unlockLevel: 3, weight: 2, color: '#a6ee6a' },
+      boss:   { hp: 12, rewardScore: 60, rewardCoins: 20, r: 50, step: 9, knock: 60, unlockLevel: 999999, weight: 0, color: '#c0392b' }   // 只在 Boss 關出現，不會隨機生
     }
   },
 
@@ -81,11 +82,27 @@ window.CONFIG = {
       { id: 'bomb',    img: 'icon_bomb', kind: 'item',  icon: '💣', name: '炸彈',       price: 50,  desc: '點一格，清掉周圍 3×3（不計分）' },
       { id: 'shuffle', img: 'icon_shuffle', kind: 'item',  icon: '🔀', name: '換一組方塊', price: 30,  desc: '重抽托盤上還沒用的方塊' },
       { id: 'freeze',  img: 'icon_freeze', kind: 'item',  icon: '❄️', name: '冰凍',       price: 40,  desc: '接下來放 3 個方塊，殭屍不前進、不出新殭屍' },
-      { id: 'candy',   img: 'icon_candy', kind: 'theme', icon: '🍬', name: '糖果方塊',   price: 500, desc: '把方塊換成糖果風格' }
+      { id: 'candy',   img: 'icon_candy', kind: 'theme', icon: '🍬', name: '糖果方塊',   price: 500, desc: '把方塊換成糖果風格' },
+      { id: 'gem',     kind: 'theme', icon: '💎', name: '寶石方塊',   price: 800, desc: '閃亮的切面寶石' },
+      { id: 'wood',    kind: 'theme', icon: '🪵', name: '木頭方塊',   price: 800, desc: '溫暖的木紋積木' }
     ],
     bombSize: 1,              // 炸彈範圍：中心往外 1 格 = 3×3
     freezePlacements: 3       // 冰凍持續幾次放置
   },
+
+  // ===== 每日登入、每日任務、看廣告領金幣 =====
+  daily: {
+    loginCoins: [20, 30, 40, 50, 60, 80, 120],   // 連續登入第 1~7 天的金幣（第 7 天以後都領最後一個）
+    adCoins: 50, adMax: 5,                        // 看廣告領金幣：一次給多少、每天最多幾次
+    tasks: [
+      { id: 'lines', name: '累計消除 20 行',     need: 20, coins: 30 },
+      { id: 'kills', name: '擊倒 15 隻殭屍',     need: 15, coins: 30 },
+      { id: 'combo', name: '單局連消達到 3 連',   need: 3,  coins: 40 }
+    ]
+  },
+
+  // ===== Boss 關 =====
+  boss: { every: 10, hpStep: 6 },   // 每 10 級出現一隻 Boss；血量 = 型別血量 + 每多一輪加 hpStep
 
   // ===== 排行榜 =====
   board: {
@@ -129,6 +146,8 @@ window.CONFIG = {
   // ===== 6 種鮮豔顏色 =====
   colors: ['#ff4d5e', '#ff9f1c', '#ffd23f', '#3ddc84', '#3aa7ff', '#b46bff'],
   candyColors: ['#ff6fa8', '#ffb347', '#ffe66d', '#7fe0a8', '#6ec6ff', '#c58bff'],   // 糖果主題
+  gemColors: ['#e0245e', '#f08a24', '#e8c217', '#1fb86a', '#2b8ae6', '#8e4fe0'],      // 寶石主題
+  woodColors: ['#c0603a', '#d9923f', '#e3c06a', '#7a9a52', '#5f8ea6', '#8c6a9e'],      // 木頭主題
 
   // ===== 方塊形狀（# 有方塊，. 空；w 是出現機率權重）=====
   shapes: [

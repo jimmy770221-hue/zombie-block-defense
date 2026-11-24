@@ -24,7 +24,8 @@
       // v 一直是 1：新欄位缺少時用預設值，舊存檔可以直接讀
       return { v: 1, best: 0, coins: 0, sound: true, music: true, vibrate: true,
                bestLevel: 1, hintSeen: false, inv: inv, theme: 'classic', ownedThemes: ['classic'],
-               board: [], lastName: '', lastEntryT: 0 };
+               board: [], lastName: '', lastEntryT: 0,
+               daily: { date: '', lastClaim: '', streak: 0, prog: {}, claimed: {}, ads: 0 } };
     };
     let data = defaults();
     try {
@@ -50,6 +51,15 @@
         if (typeof o.theme === 'string' && d.ownedThemes.indexOf(o.theme) >= 0) d.theme = o.theme;
         if (typeof o.lastName === 'string') d.lastName = Array.from(o.lastName).slice(0, C.board.nameMax).join('');
         if (Number.isFinite(o.lastEntryT)) d.lastEntryT = o.lastEntryT;
+        if (o.daily && typeof o.daily === 'object') {
+          const q = o.daily, dd = d.daily;
+          if (typeof q.date === 'string') dd.date = q.date;
+          if (typeof q.lastClaim === 'string') dd.lastClaim = q.lastClaim;
+          if (Number.isFinite(q.streak) && q.streak >= 0) dd.streak = Math.floor(q.streak);
+          if (Number.isFinite(q.ads) && q.ads >= 0) dd.ads = Math.floor(q.ads);
+          if (q.prog && typeof q.prog === 'object') Object.keys(q.prog).forEach(function (k) { if (Number.isFinite(q.prog[k]) && q.prog[k] >= 0) dd.prog[k] = q.prog[k]; });
+          if (q.claimed && typeof q.claimed === 'object') Object.keys(q.claimed).forEach(function (k) { if (q.claimed[k] === true) dd.claimed[k] = true; });
+        }
         if (Array.isArray(o.board)) {
           d.board = o.board.filter(function (b) {
             return b && Number.isFinite(b.score) && b.score >= 0 && Number.isFinite(b.level) && b.level >= 1 && typeof b.name === 'string' && Number.isFinite(b.t);
@@ -131,7 +141,10 @@
       hit: function () { tone(180, 0.12, 'square', 0.2, 80); },
       warn: function () { tone(440, 0.12, 'square', 0.15); tone(330, 0.12, 'square', 0.15, null, 0.13); },
       over: function () { tone(330, 0.2, 'sawtooth', 0.22, 120); tone(165, 0.4, 'sawtooth', 0.22, 70, 0.2); },
-      coin: function () { tone(988, 0.08, 'square', 0.15); tone(1319, 0.18, 'square', 0.15, null, 0.08); }
+      coin: function () { tone(988, 0.08, 'square', 0.15); tone(1319, 0.18, 'square', 0.15, null, 0.08); },
+      pop: function () { noise(0.08, 0.18); tone(320, 0.12, 'triangle', 0.22, 120); },
+      boss: function () { tone(90, 0.7, 'sawtooth', 0.3, 45); tone(135, 0.7, 'square', 0.15, 60, 0.05); noise(0.4, 0.2, 0.1); },
+      claim: function () { tone(659, 0.1, 'triangle', 0.22); tone(784, 0.1, 'triangle', 0.22, null, 0.1); tone(1047, 0.25, 'triangle', 0.25, null, 0.2); }
     };
     // 背景音樂：程式合成的短旋律，一直循環（只在遊戲進行中播）
     const MEL = [440, 0, 523, 0, 659, 0, 523, 0, 440, 0, 392, 0, 349, 0, 392, 0, 440, 0, 523, 0, 659, 0, 784, 0, 659, 0, 523, 0, 587, 0, 523, 0];
@@ -202,6 +215,7 @@
         '<button class="btn gray half" id="btn-shop">🛒 商店</button>' +
         '<button class="btn gray half" id="btn-board">🏆 排行榜</button>' +
       '</div>' +
+      '<button class="btn gold" id="btn-daily">📅 每日獎勵<span id="dl-dot" class="dot hidden">!</span></button>' +
       '<button class="btn gray small" id="btn-set" aria-label="設定"><span class="emo">⚙ </span>' + artImg('icon_gear') + '設定</button>' +
       '<div id="ver"></div>' +
     '</div>' +
@@ -217,6 +231,12 @@
       '<div class="row">金幣　' + artImg('coin', 'coin big') + '<b id="sh-coins">0</b></div>' +
       '<div id="sh-list"></div>' +
       '<button class="btn gray" id="btn-shop-close">返回</button>' +
+    '</div>' +
+    '<div id="scr-daily" class="screen hidden">' +
+      '<div class="h2">每日獎勵</div>' +
+      '<div class="row">金幣　' + artImg('coin', 'coin big') + '<b id="dl-coins">0</b></div>' +
+      '<div id="dl-list"></div>' +
+      '<button class="btn gray" id="btn-daily-close">返回</button>' +
     '</div>' +
     '<div id="scr-board" class="screen hidden">' +
       '<div class="h2">排行榜</div>' +
@@ -270,7 +290,7 @@
     '</div>';
   while (ui.firstChild) stage.appendChild(ui.firstChild);
   const $ = function (id) { return document.getElementById(id); };
-  const screens = ['scr-start', 'scr-pause', 'scr-over', 'scr-stats', 'scr-revive', 'scr-shop', 'scr-board', 'scr-set'];
+  const screens = ['scr-start', 'scr-pause', 'scr-over', 'scr-stats', 'scr-revive', 'scr-shop', 'scr-board', 'scr-set', 'scr-daily'];
   function show(id) { $(id).classList.remove('hidden'); }
   function hide(id) { $(id).classList.add('hidden'); }
   function showOnly(id) { screens.forEach(hide); if (id) show(id); }
@@ -461,6 +481,81 @@
   }
   function fmtDate(t) { const d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate(); }
 
+  // ================= 每日獎勵：登入、任務、看廣告領金幣 =================
+  function dayKey(t) { const d = new Date(t); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  const Daily = {
+    today: function () { return dayKey(Date.now()); },
+    // 換日就把今天的進度、看廣告次數歸零（連續登入天數另外算）
+    state: function () {
+      let d = Save.get('daily');
+      if (d.date !== Daily.today()) { d = { date: Daily.today(), lastClaim: d.lastClaim, streak: d.streak, prog: {}, claimed: {}, ads: 0 }; Save.set('daily', d); }
+      return d;
+    },
+    // 單局最高類（連消）用 max，其餘累加
+    report: function (kind, n) {
+      const d = Daily.state(), cur = d.prog[kind] || 0, nv = kind === 'combo' ? Math.max(cur, n) : cur + n;
+      if (nv === cur) return;
+      const nd = Object.assign({}, d, { prog: Object.assign({}, d.prog) }); nd.prog[kind] = nv; Save.set('daily', nd);
+    },
+    nextStreak: function () { const d = Daily.state(); return d.lastClaim === dayKey(Date.now() - 86400000) ? d.streak + 1 : 1; },
+    loginReady: function () { return Daily.state().lastClaim !== Daily.today(); },
+    loginCoins: function (st) { const a = C.daily.loginCoins; return a[Math.min(st, a.length) - 1]; },
+    claimLogin: function () {
+      if (!Daily.loginReady()) return 0;
+      const st = Daily.nextStreak(), c = Daily.loginCoins(st), d = Daily.state();
+      Save.set('daily', Object.assign({}, d, { lastClaim: Daily.today(), streak: st }));
+      Save.add('coins', c); track('daily_login', { streak: st, coins: c }); return c;
+    },
+    taskDone: function (t) { return (Daily.state().prog[t.id] || 0) >= t.need; },
+    claimTask: function (t) {
+      const d = Daily.state();
+      if (!Daily.taskDone(t) || d.claimed[t.id]) return 0;
+      const nd = Object.assign({}, d, { claimed: Object.assign({}, d.claimed) }); nd.claimed[t.id] = true; Save.set('daily', nd);
+      Save.add('coins', t.coins); track('daily_task', { task: t.id, coins: t.coins }); return t.coins;
+    },
+    adLeft: function () { return Math.max(0, C.daily.adMax - Daily.state().ads); },
+    claimAd: function () {
+      const d = Daily.state(); if (d.ads >= C.daily.adMax) return 0;
+      Save.set('daily', Object.assign({}, d, { ads: d.ads + 1 })); Save.add('coins', C.daily.adCoins); return C.daily.adCoins;
+    },
+    // 有沒有東西可以領（首頁的小紅點用）
+    hasReward: function () { return Daily.loginReady() || C.daily.tasks.some(function (t) { return Daily.taskDone(t) && !Daily.state().claimed[t.id]; }); }
+  };
+  function openDaily() { renderDaily(); showOnly('scr-daily'); }
+  function renderDaily() {
+    $('dl-coins').textContent = Save.get('coins');
+    const list = $('dl-list'); list.textContent = '';
+    function row(icon, name, desc, right) {
+      const r = document.createElement('div'); r.className = 'sh-row';
+      const i = document.createElement('div'); i.className = 'sh-ic';
+      const em = document.createElement('span'); em.className = 'emo keep'; em.textContent = icon; i.appendChild(em);
+      const m = document.createElement('div'); m.className = 'sh-mid';
+      const n = document.createElement('b'); n.textContent = name;
+      const dd = document.createElement('small'); dd.textContent = desc;
+      m.appendChild(n); m.appendChild(dd);
+      const w = document.createElement('div'); w.className = 'sh-r'; w.appendChild(right);
+      r.appendChild(i); r.appendChild(m); r.appendChild(w); list.appendChild(r);
+    }
+    function btn(text, cls, off, fn) { const b = document.createElement('button'); b.className = 'btn small ' + cls; b.textContent = text; b.disabled = !!off; b.onclick = fn; return b; }
+    function after(c) { Sfx.play('claim'); renderDaily(); refreshStart(); }
+    // 登入
+    const ready = Daily.loginReady(), st = ready ? Daily.nextStreak() : Daily.state().streak;
+    row('📅', '每日登入', '連續第 ' + Math.max(1, st) + ' 天　' + (ready ? '今天可領 ' + Daily.loginCoins(st) + ' 金幣' : '今天已領取，明天再來'),
+      btn(ready ? '領取' : '已領取', ready ? 'gold' : 'gray', !ready, function () { if (Daily.claimLogin()) after(); }));
+    // 任務
+    C.daily.tasks.forEach(function (t) {
+      const d = Daily.state(), got = Math.min(t.need, d.prog[t.id] || 0), done = got >= t.need, cl = !!d.claimed[t.id];
+      row(done ? '✅' : '🎯', t.name, '進度 ' + got + ' / ' + t.need + '　獎勵 ' + t.coins + ' 金幣',
+        btn(cl ? '已領取' : (done ? '領取' : '未完成'), done && !cl ? 'gold' : 'gray', !done || cl, function () { if (Daily.claimTask(t)) after(); }));
+    });
+    // 看廣告領金幣
+    const left = Daily.adLeft();
+    row('📺', '看廣告領金幣', '每次 ' + C.daily.adCoins + ' 金幣　今天還能看 ' + left + ' 次',
+      btn(left > 0 ? '觀看' : '明天再來', left > 0 ? 'gold' : 'gray', left <= 0, function () {
+        Ads.rewarded('看完廣告，領取金幣', function () { if (Daily.claimAd()) after(); });
+      }));
+  }
+
   // ================= 商店（只用金幣）=================
   function openShop() { renderShop(); showOnly('scr-shop'); }
   function renderShop() {
@@ -469,7 +564,7 @@
     function row(icon, name, desc, right, img) {
       const r = document.createElement('div'); r.className = 'sh-row';
       const i = document.createElement('div'); i.className = 'sh-ic';
-      const em = document.createElement('span'); em.className = 'emo'; em.textContent = icon; i.appendChild(em);
+      const em = document.createElement('span'); em.className = 'emo' + (img ? '' : ' keep'); em.textContent = icon; i.appendChild(em);
       if (img) i.insertAdjacentHTML('beforeend', artImg(img, '', name));
       const m = document.createElement('div'); m.className = 'sh-mid';
       const n = document.createElement('b'); n.textContent = name;
@@ -522,6 +617,7 @@
     $('st-best').textContent = Save.get('best');
     $('st-lv').textContent = 'Lv ' + Save.get('bestLevel');
     $('st-coins').textContent = Save.get('coins');
+    $('dl-dot').classList.toggle('hidden', !Daily.hasReward());
   }
 
   // ================= 統計畫面 =================
@@ -650,6 +746,8 @@
     $('btn-over-home').onclick = function () { Sfx.play('click'); state = 'start'; paused = false; hide('hud'); refreshStart(); showOnly('scr-start'); };
     $('btn-shop').onclick = function () { Sfx.play('click'); openShop(); };
     $('btn-board').onclick = function () { Sfx.play('click'); openBoard(); };
+    $('btn-daily').onclick = function () { Sfx.unlock(); Sfx.play('click'); openDaily(); };
+    $('btn-daily-close').onclick = function () { Sfx.play('click'); refreshStart(); showOnly('scr-start'); };
     $('btn-shop-close').onclick = function () { Sfx.play('click'); refreshStart(); showOnly('scr-start'); };
     $('btn-board-close').onclick = function () { Sfx.play('click'); showOnly('scr-start'); };
     // 確定鍵用 pointerdown：輸入框收鍵盤時版面會動，用 click 容易點不到
@@ -694,7 +792,7 @@
   const Core = {
     W: W, H: H, ctx: ctx, config: C,
     boot: boot, askRevive: askRevive, endGame: function (s, r, info) { endGame(s, r, info); }, setScore: setScore, setLevel: setLevel,
-    Items: Items,
+    Items: Items, Daily: Daily,
     isPlaying: function () { return state === 'play' && !paused && !Ads.active; },
     Save: Save, Sfx: Sfx, Ads: Ads, track: track, buzz: buzz,
     _stats: statsData, _log: function () { return log; }, _lastEntry: function () { return lastEntry; }

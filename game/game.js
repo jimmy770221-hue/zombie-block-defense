@@ -10,7 +10,7 @@ window.Game = (function () {
   let level = 1, lvScore = 0, roundTime = 0, lvBanner = null, lvKey = '';
   let statLines = 0, statCombo = 0, comboN = 0, comboT = 0, slowT = 0, flashA = 0, rings = [], freezeLeft = 0, used = {}, bombMode = false, aim = null, theme = 'classic', hint = false, notice = null;
   let itemBtns = {};
-  function pal() { return theme === 'candy' ? C.candyColors : C.colors; }
+  function pal() { return theme === 'candy' ? C.candyColors : (theme === 'gem' ? C.gemColors : (theme === 'wood' ? C.woodColors : C.colors)); }
 
   // ---------- 工具 ----------
   function rnd(n) { return Math.floor(Math.random() * n); }
@@ -62,8 +62,38 @@ window.Game = (function () {
     ctx.beginPath(); ctx.ellipse(x + s * 0.3, y + s * 0.27, s * 0.12, s * 0.07, -0.6, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
+  function gemBlock(ctx, x, y, s, base, alpha) {                         // 寶石：切面
+    const pad = s * 0.05, w = s - pad * 2, x0 = x + pad, y0 = y + pad, m = w * 0.24;
+    ctx.save(); ctx.globalAlpha = alpha === undefined ? 1 : alpha;
+    ctx.fillStyle = shade(base, -0.4); rrect(ctx, x0, y0 + s * 0.05, w, w, s * 0.16); ctx.fill();   // 底影
+    ctx.fillStyle = base; rrect(ctx, x0, y0, w, w - s * 0.04, s * 0.16); ctx.fill();
+    ctx.save(); rrect(ctx, x0, y0, w, w - s * 0.04, s * 0.16); ctx.clip();
+    ctx.fillStyle = 'rgba(255,255,255,0.38)'; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + w, y0); ctx.lineTo(x0 + w - m, y0 + m); ctx.lineTo(x0 + m, y0 + m); ctx.closePath(); ctx.fill();   // 上
+    ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + m, y0 + m); ctx.lineTo(x0 + m, y0 + w - m); ctx.lineTo(x0, y0 + w); ctx.closePath(); ctx.fill();   // 左
+    ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.beginPath(); ctx.moveTo(x0 + w, y0); ctx.lineTo(x0 + w - m, y0 + m); ctx.lineTo(x0 + w - m, y0 + w - m); ctx.lineTo(x0 + w, y0 + w); ctx.closePath(); ctx.fill();   // 右
+    ctx.fillStyle = 'rgba(0,0,0,0.34)'; ctx.beginPath(); ctx.moveTo(x0, y0 + w); ctx.lineTo(x0 + m, y0 + w - m); ctx.lineTo(x0 + w - m, y0 + w - m); ctx.lineTo(x0 + w, y0 + w); ctx.closePath(); ctx.fill();   // 下
+    ctx.restore();
+    ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.beginPath(); ctx.arc(x0 + w * 0.3, y0 + w * 0.3, s * 0.05, 0, Math.PI * 2); ctx.fill();   // 閃光
+    ctx.restore();
+  }
+  function woodBlock(ctx, x, y, s, base, alpha) {                        // 木頭：木紋
+    const pad = s * 0.04, w = s - pad * 2, x0 = x + pad, y0 = y + pad;
+    ctx.save(); ctx.globalAlpha = alpha === undefined ? 1 : alpha;
+    ctx.fillStyle = shade(base, -0.5); rrect(ctx, x0, y0 + s * 0.07, w, w - s * 0.02, s * 0.12); ctx.fill();
+    ctx.fillStyle = base; rrect(ctx, x0, y0, w, w - s * 0.07, s * 0.12); ctx.fill();
+    ctx.save(); rrect(ctx, x0, y0, w, w - s * 0.07, s * 0.12); ctx.clip();
+    ctx.strokeStyle = shade(base, -0.25); ctx.lineWidth = Math.max(1, s * 0.04);
+    for (let k = 1; k <= 3; k++) { const yy = y0 + (w - s * 0.07) * k / 4; ctx.beginPath(); ctx.moveTo(x0, yy); ctx.bezierCurveTo(x0 + w * 0.3, yy - s * 0.06, x0 + w * 0.6, yy + s * 0.06, x0 + w, yy); ctx.stroke(); }
+    ctx.strokeStyle = shade(base, -0.4); ctx.beginPath(); ctx.ellipse(x0 + w * 0.68, y0 + w * 0.4, s * 0.09, s * 0.06, 0, 0, Math.PI * 2); ctx.stroke();   // 木節
+    ctx.fillStyle = 'rgba(255,255,255,0.22)'; ctx.fillRect(x0, y0, w, s * 0.1);
+    ctx.restore();
+    ctx.strokeStyle = shade(base, -0.55); ctx.lineWidth = Math.max(1, s * 0.035); rrect(ctx, x0, y0, w, w - s * 0.07, s * 0.12); ctx.stroke();
+    ctx.restore();
+  }
   function block(ctx, x, y, s, ci, alpha) {
     if (theme === 'candy') { candyBlock(ctx, x, y, s, pal()[ci], alpha); return; }
+    if (theme === 'gem') { gemBlock(ctx, x, y, s, pal()[ci], alpha); return; }
+    if (theme === 'wood') { woodBlock(ctx, x, y, s, pal()[ci], alpha); return; }
     const base = C.colors[ci], pad = s * 0.04;
     ctx.save();
     ctx.globalAlpha = alpha === undefined ? 1 : alpha;
@@ -160,7 +190,13 @@ window.Game = (function () {
     if (!free.length) return;
     const x = free[rnd(free.length)] + rnd(21) - 10;
     const tp = type || pickType();
-    zombies.push({ type: tp, hp: Z.types[tp].hp || 1, x: x, ty: Z.spawnY, y: Z.spawnY - 50, hit: 0, pending: 0, ph: Math.random() * 6 });
+    zombies.push({ type: tp, hp: Z.types[tp].hp || 1, max: Z.types[tp].hp || 1, x: x, ty: Z.spawnY, y: Z.spawnY - 50, hit: 0, pending: 0, ph: Math.random() * 6 });
+  }
+  // Boss：每 10 級出現一隻，不受殭屍數量上限限制；血量隨輪數增加
+  function isBossLevel() { return level % C.boss.every === 0; }
+  function spawnBoss() {
+    const hp = Z.types.boss.hp + C.boss.hpStep * (level / C.boss.every - 1);
+    zombies.push({ type: 'boss', hp: hp, max: hp, x: 270, ty: Z.spawnY, y: Z.spawnY - 50, hit: 0, pending: 0, ph: 0 });
   }
   // 前進距離倍率：每級 +0.04，超過 15 級後每級 +0.02，不封頂
   function stepMult() {
@@ -213,8 +249,9 @@ window.Game = (function () {
     level++; lvScore = 0;
     zombies.forEach(function (z) { z.ty = Math.max(Z.spawnY, z.ty - L.knockback); });   // 獎勵：全部往後退
     if (level % L.waveEvery === 0) for (let i = 0; i < L.waveExtra; i++) spawnZombie();    // 第 5、10、15… 級：一次多來幾隻
-    const T = C.tower, evo = level >= T.cannonFrom && level < T.mgFrom && (level - T.cannonFrom) % T.every === 0 ? '箭塔進化成砲塔！' :
+    const T = C.tower; let evo = level >= T.cannonFrom && level < T.mgFrom && (level - T.cannonFrom) % T.every === 0 ? '箭塔進化成砲塔！' :
       (level >= T.mgFrom && level < T.mgFrom + T.every * C.cannon.max && (level - T.mgFrom) % T.every === 0 ? '砲塔進化成機槍塔！' : '');
+    if (isBossLevel()) { spawnBoss(); evo = (evo ? evo + ' ' : '') + 'Boss 來襲！'; core.Sfx.play('boss'); }
     lvBanner = { t: 0, n: level, cannon: level % C.cannon.perLevels === 0 && level / C.cannon.perLevels < C.cannon.max, evo: evo };
     core.Sfx.play('levelup'); core.buzz(30);
     core.track('level_up', { level: level, score: score, seconds: Math.round(roundTime) });
@@ -251,7 +288,9 @@ window.Game = (function () {
       const a = Math.random() * Math.PI * 2, v = 120 + Math.random() * 200;
       particles.push({ x: x, y: y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 80, t: 0, life: 0.5, css: T.color, s: 9 });
     }
-    core.Sfx.play('coin'); checkLevel();
+    if (z.type === 'boss') { shake = 0.4; flashA = 0.5; core.Sfx.play('levelup'); addText(core.W / 2, 330, 'Boss 倒下！', '#ffd54a', 52); }
+    core.Daily.report('kills', 1);
+    core.Sfx.play('pop'); core.Sfx.play('coin'); checkLevel();
   }
   function wallBroken() { return zombies.some(function (z) { return z.ty >= WALL_Y; }); }
   function warning() { const f = frontZombie(); return !!f && f.ty >= WALL_Y - Z.warnDist; }
@@ -321,6 +360,7 @@ window.Game = (function () {
       // 限時連消：每次消除重新倒數，時間內再消除 combo+1；子彈 = 條數 × 2^(combo−1)，有上限
       comboN = comboT > 0 ? comboN + 1 : 1; comboT = comboMax();
       statLines += n; if (comboN > statCombo) statCombo = comboN;
+      core.Daily.report('lines', n); core.Daily.report('combo', comboN);
       const shots = Math.min(C.combo.maxBullets, Math.round(n * Math.pow(C.combo.growth, comboN - 1)));
       if (comboN >= 2) {
         const cl = Math.min(comboN, 8);
@@ -640,15 +680,15 @@ window.Game = (function () {
   function laneX(x, y) { return 270 + (x - 270) * (Z.laneNarrow + (1 - Z.laneNarrow) * depthT(y)); }
   function depthScale(y) { const t = depthT(y); return Z.depthFar + (Z.depthNear - Z.depthFar) * t; }
   function drawZombieArt(ctx, z) {
-    const T = Z.types[z.type], im = ART[z.type];
+    const T = Z.types[z.type], key = z.type === 'boss' ? 'fat' : z.type, im = ART[key];
     if (!im) return false;
-    const f = FRAME[z.type], size = T.r * 4.2, fr = Math.floor(time * (z.type === 'fast' ? 12 : 8) + z.ph * 2) % 4;
+    const f = FRAME[key], size = T.r * 4.2 * (z.type === 'boss' ? 0.9 : 1), fr = Math.floor(time * (z.type === 'fast' ? 12 : 8) + z.ph * 2) % 4;
     const sq = z.hit > 0 ? 1 + z.hit * 1.2 : 1;
     ctx.save();
     ctx.translate(laneX(z.x, z.y), z.y);
     const ds = depthScale(z.y); ctx.scale(ds, ds); ctx.globalAlpha = Z.depthFog + (1 - Z.depthFog) * Math.min(1, depthT(z.y) * 2.5);
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.beginPath(); ctx.ellipse(0, 0, T.r * 0.9, T.r * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = z.type === 'boss' ? 'rgba(220,40,30,0.45)' : 'rgba(0,0,0,0.25)';
+    ctx.beginPath(); ctx.ellipse(0, 0, T.r * (z.type === 'boss' ? 1.2 : 0.9), T.r * 0.3, 0, 0, Math.PI * 2); ctx.fill();
     ctx.translate(0, size * 0.1); ctx.scale(1 / sq, sq);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(im, fr * f, 0, f, f, -size / 2, -size, size, size);
@@ -683,8 +723,8 @@ window.Game = (function () {
     ctx.restore();
   }
   function drawHp(ctx, z) {
-    const T = Z.types[z.type], mx = T.hp || 1; if (mx <= 1 || z.hp >= mx || z.hp <= 0) return;   // 只有受傷的才顯示血條
-    const s = depthScale(z.y), w = 44 * s, x = laneX(z.x, z.y) - w / 2, y = z.y - T.r * 2 * s - 12 * s;
+    const T = Z.types[z.type], mx = z.max || T.hp || 1; if (mx <= 1 || (z.type !== 'boss' && z.hp >= mx) || z.hp <= 0) return;   // 只有受傷的才顯示血條
+    const s = depthScale(z.y), w = (z.type === 'boss' ? 80 : 44) * s, x = laneX(z.x, z.y) - w / 2, y = Math.max(60, z.y - T.r * (z.type === 'boss' ? 3.4 : 2) * s - 12 * s);
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - 1, y - 1, w + 2, 8 * s + 2);
     ctx.fillStyle = '#ff5a4a'; ctx.fillRect(x, y, w * Math.max(0, z.hp) / mx, 8 * s);
   }

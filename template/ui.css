@@ -86,10 +86,10 @@ body {
 
 /* 開始畫面 */
 #scr-start { isolation: isolate; justify-content: flex-start; gap: 18px; padding-top: 70px; overflow: hidden; background: rgba(8, 16, 11, 0.35); }
-#st-bg { position: absolute; inset: 0; z-index: -1; background: #10190f url(../assets/bg.png?v=20261125a) center / cover no-repeat; image-rendering: pixelated; }
+#st-bg { position: absolute; inset: 0; z-index: -1; background: #10190f url(../assets/bg.png?v=20261125b) center / cover no-repeat; image-rendering: pixelated; }
 #st-bg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(5,10,7,.55), rgba(5,10,7,.15) 40%, rgba(5,10,7,.7)); }
 #scr-start .title { margin-bottom: 0; }
-#st-zombie { width: 264px; height: 264px; background: url(../assets/normal.png?v=20261125a) 0 0 / 1056px 264px no-repeat; image-rendering: pixelated; animation: zwalk .55s steps(4) infinite; filter: drop-shadow(0 12px 6px rgba(0,0,0,.45)); }
+#st-zombie { width: 264px; height: 264px; background: url(../assets/normal.png?v=20261125b) 0 0 / 1056px 264px no-repeat; image-rendering: pixelated; animation: zwalk .55s steps(4) infinite; filter: drop-shadow(0 12px 6px rgba(0,0,0,.45)); }
 @keyframes zwalk { to { background-position-x: -1056px; } }
 #st-stats { display: flex; gap: 10px; width: 100%; }
 #st-stats > div { flex: 1; background: rgba(0,0,0,.5); border-radius: 16px; padding: 10px 6px; display: flex; flex-direction: column; gap: 2px; }
@@ -97,7 +97,7 @@ body {
 #st-stats b { font-size: 34px; color: #ffe27a; }
 .btn.half { min-width: 0; flex: 1; font-size: 28px; padding: 16px 10px; }
 #scr-start .btn-row { width: 100%; margin-top: 0; }
-#btn-set { position: absolute; left: 18px; bottom: 14px; font-size: 22px; padding: 8px 16px; }
+#btn-set { position: absolute; left: 18px; top: 16px; font-size: 22px; padding: 8px 16px; }
 
 /* 商店、排行榜 */
 #scr-set { z-index: 35; gap: 16px; background: rgba(10, 20, 14, 0.94); }
@@ -137,16 +137,16 @@ body {
 
 /* 按鈕：九宮格（綠／金／灰，按下換 down 圖；圖片自己帶陰影，所以不另外加） */
 .art .btn {
-  border: 28px solid transparent; border-image: url(../assets/btn_green.png?v=20261125a) 28 fill / 28px / 0 stretch;
+  border: 28px solid transparent; border-image: url(../assets/btn_green.png?v=20261125b) 28 fill / 28px / 0 stretch;
   background: none; box-shadow: none; padding: 0 8px; min-height: 84px; line-height: 1;
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   text-shadow: 0 3px 0 rgba(0,0,0,.55); image-rendering: pixelated;
 }
-.art .btn:active { border-image-source: url(../assets/btn_green_down.png?v=20261125a); transform: none; box-shadow: none; }
-.art .btn.gold { border-image-source: url(../assets/btn_gold.png?v=20261125a); background: none; box-shadow: none; }
-.art .btn.gold:active { border-image-source: url(../assets/btn_gold_down.png?v=20261125a); box-shadow: none; }
-.art .btn.gray { border-image-source: url(../assets/btn_gray.png?v=20261125a); background: none; box-shadow: none; }
-.art .btn.gray:active { border-image-source: url(../assets/btn_gray_down.png?v=20261125a); box-shadow: none; }
+.art .btn:active { border-image-source: url(../assets/btn_green_down.png?v=20261125b); transform: none; box-shadow: none; }
+.art .btn.gold { border-image-source: url(../assets/btn_gold.png?v=20261125b); background: none; box-shadow: none; }
+.art .btn.gold:active { border-image-source: url(../assets/btn_gold_down.png?v=20261125b); box-shadow: none; }
+.art .btn.gray { border-image-source: url(../assets/btn_gray.png?v=20261125b); background: none; box-shadow: none; }
+.art .btn.gray:active { border-image-source: url(../assets/btn_gray_down.png?v=20261125b); box-shadow: none; }
 .art .btn.small { min-width: 0; min-height: 56px; border-width: 18px; border-image-width: 18px; padding: 0 4px; font-size: 24px; }
 .art .btn.half { padding: 0 6px; }
 .art .btn .ic { height: 32px; width: auto; }
@@ -155,14 +155,14 @@ body {
 .art #btn-set { min-height: 52px; }
 
 /* 首頁：標題圖、底圖 */
-.art .title { font-size: 0; width: 480px; height: 150px; margin: 0; text-shadow: none; background: url(../assets/title.png?v=20261125a) center / contain no-repeat; image-rendering: pixelated; }
+.art .title { font-size: 0; width: 480px; height: 150px; margin: 0; text-shadow: none; background: url(../assets/title.png?v=20261125b) center / contain no-repeat; image-rendering: pixelated; }
 .art #scr-start { background: transparent; }
-.art #st-bg { background: #10190f url(../assets/home_bg.png?v=20261125a) center / cover no-repeat; }
+.art #st-bg { background: #10190f url(../assets/home_bg.png?v=20261125b) center / cover no-repeat; }
 .art #st-bg::after { background: none; }
 
 /* 設定、商店、排行榜：商店底圖＋商品卡 */
-.art #scr-set, .art #scr-shop, .art #scr-board { background: #0d1613 url(../assets/shop_bg.png?v=20261125a) center / cover no-repeat; image-rendering: pixelated; }
-.art .sh-row { background: none; border: 16px solid transparent; border-image: url(../assets/card_item.png?v=20261125a) 24 fill / 16px / 0 stretch; border-radius: 0; padding: 0 6px; image-rendering: pixelated; }
+.art #scr-set, .art #scr-shop, .art #scr-board { background: #0d1613 url(../assets/shop_bg.png?v=20261125b) center / cover no-repeat; image-rendering: pixelated; }
+.art .sh-row { background: none; border: 16px solid transparent; border-image: url(../assets/card_item.png?v=20261125b) 24 fill / 16px / 0 stretch; border-radius: 0; padding: 0 6px; image-rendering: pixelated; }
 .art .sh-ic { width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; }
 .art .sh-ic .ic { width: 64px; height: 64px; }
 .art .sh-r .btn { min-width: 120px; }
@@ -171,9 +171,20 @@ body {
 /* 遊戲中：暫停鈕、道具鈕 */
 .art #btn-pause { opacity: .9; display: flex; align-items: center; justify-content: center; font-size: 0; }
 .art #btn-pause .ic { width: 28px; height: 28px; }
-.art .itbtn { background: url(../assets/item_frame.png?v=20261125a) center / 100% 100% no-repeat; box-shadow: none; image-rendering: pixelated; font-size: 0; }
+.art .itbtn { background: url(../assets/item_frame.png?v=20261125b) center / 100% 100% no-repeat; box-shadow: none; image-rendering: pixelated; font-size: 0; }
 .art .itbtn .ic { position: absolute; left: 50%; top: 50%; width: 38px; height: 38px; transform: translate(-50%, -50%); }
 .art .itbtn:active { transform: translateY(2px); box-shadow: none; }
-.art .itbtn.off { background-image: url(../assets/item_frame_off.png?v=20261125a); opacity: .8; }
+.art .itbtn.off { background-image: url(../assets/item_frame_off.png?v=20261125b); opacity: .8; }
 .art .itbtn.off .ic { filter: grayscale(1); opacity: .55; }
-.art .itbtn.aim { background: url(../assets/item_frame.png?v=20261125a) center / 100% 100% no-repeat; filter: drop-shadow(0 0 7px #ffb347) brightness(1.25); box-shadow: none; }
+.art .itbtn.aim { background: url(../assets/item_frame.png?v=20261125b) center / 100% 100% no-repeat; filter: drop-shadow(0 0 7px #ffb347) brightness(1.25); box-shadow: none; }
+
+/* ===== 每日獎勵 ===== */
+#scr-daily { justify-content: flex-start; padding-top: 50px; gap: 12px; z-index: 35; background: rgba(10, 20, 14, 0.94); }
+#dl-list { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.art #scr-daily { background: #0d1613 url(../assets/shop_bg.png?v=20261125b) center / cover no-repeat; image-rendering: pixelated; }
+#btn-daily { position: relative; }
+#btn-daily .dot { position: absolute; top: -8px; right: -6px; width: 34px; height: 34px; line-height: 34px; border-radius: 50%; background: #e53935; color: #fff; font-size: 24px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,.5); }
+#btn-daily .dot.hidden { display: none; }
+#scr-shop { overflow: hidden; }
+#sh-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.art .emo.keep { display: inline; }
