@@ -602,7 +602,7 @@ window.Game = (function () {
     ctx.restore();
   }
   function drawZone(ctx) {
-    if (ART.bg) { ctx.imageSmoothingEnabled = false; ctx.drawImage(ART.bg, 0, 30, 256, 204, 0, C.zombieZone.top, core.W, WALL_Y - C.zombieZone.top); }
+    if (ART.bg) { ctx.imageSmoothingEnabled = false; ctx.drawImage(ART.bg, 0, 0, 256, 192, 0, C.zombieZone.top, core.W, WALL_Y - C.zombieZone.top); }
     ctx.fillStyle = ART.bg ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.18)';
     ctx.fillRect(0, C.zombieZone.top, core.W, WALL_Y - C.zombieZone.top);
     ctx.fillStyle = 'rgba(0,0,0,0.38)';                                        // 右邊按鈕欄（殭屍不會走到這裡）
