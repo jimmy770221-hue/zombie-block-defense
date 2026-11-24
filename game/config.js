@@ -96,7 +96,8 @@ window.CONFIG = {
   },
 
   // ===== 砲台 =====
-  cannon: { x: 270, shotGap: 0.14, flight: 0.2, recoil: 16 },
+  cannon: { x: 270, shotGap: 0.14, flight: 0.2, recoil: 16,
+            perLevels: 10, max: 5, spacing: 76, comboBonus: 2 },   // 每 10 級多 1 個砲塔（最多 5 個）；每多 1 個，combo 倒數 +2 秒
 
   // ===== 復活 =====
   revive: { clearSize: 4 },    // 清空格子正中央 4×4

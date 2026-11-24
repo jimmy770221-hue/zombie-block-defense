@@ -182,22 +182,28 @@ window.Game = (function () {
     if (ending) return;
     if (lvScore >= L.scoreNeed) levelUp();
   }
+  // 砲塔數量：1 個起，每 perLevels 級多 1 個，最多 max 個
+  function cannonCount() { return Math.min(C.cannon.max, 1 + Math.floor(level / C.cannon.perLevels)); }
+  function cannonXs() { const k = cannonCount(); return Array.from({ length: k }, function (_, i) { return C.cannon.x + (i - (k - 1) / 2) * C.cannon.spacing; }); }
+  function comboMax() { return C.combo.seconds + C.cannon.comboBonus * (cannonCount() - 1); }
   function levelUp() {
     level++; lvScore = 0;
     zombies.forEach(function (z) { z.ty = Math.max(Z.spawnY, z.ty - L.knockback); });   // 獎勵：全部往後退
     if (level % L.waveEvery === 0) for (let i = 0; i < L.waveExtra; i++) spawnZombie();    // 第 5、10、15… 級：一次多來幾隻
-    lvBanner = { t: 0, n: level };
+    lvBanner = { t: 0, n: level, cannon: level % C.cannon.perLevels === 0 && level / C.cannon.perLevels < C.cannon.max };
     core.Sfx.play('levelup'); core.buzz(30);
     core.track('level_up', { level: level, score: score, seconds: Math.round(roundTime) });
     syncLevel(true);
   }
   // 每消除 1 條，砲台打 1 發，擊退最前面的殭屍
   function fireLines(n, lv) {
-    const gap = Math.min(C.cannon.shotGap, C.combo.volleySec / n);
+    const gap = Math.min(C.cannon.shotGap, C.combo.volleySec / n), xs = cannonXs();
     for (let i = 0; i < n; i++) {
-      const z = frontZombie();
-      if (z) { z.ty = Math.max(Z.spawnY, z.ty - Z.types[z.type].knock); z.pending++; }
-      balls.push({ t: -i * gap, z: z, fired: false, x: 0, y: 0, lv: lv || 1 });
+      xs.forEach(function (cx, ci) {                 // 每個砲塔各打一輪
+        const z = frontZombie();
+        if (z) { z.ty = Math.max(Z.spawnY, z.ty - Z.types[z.type].knock); z.pending++; }
+        balls.push({ t: -i * gap, z: z, fired: false, x: 0, y: 0, lv: lv || 1, cx: cx, ci: ci });
+      });
     }
   }
   function wallBroken() { return zombies.some(function (z) { return z.ty >= WALL_Y; }); }
@@ -264,7 +270,7 @@ window.Game = (function () {
     if (hint) { hint = false; core.Save.set('hintSeen', true); }     // 放了第一個方塊，新手提示就收起來
     if (n > 0) {
       // 限時連消：每次消除重新倒數，時間內再消除 combo+1；子彈 = 條數 × 2^(combo−1)，有上限
-      comboN = comboT > 0 ? comboN + 1 : 1; comboT = C.combo.seconds;
+      comboN = comboT > 0 ? comboN + 1 : 1; comboT = comboMax();
       statLines += n; if (comboN > statCombo) statCombo = comboN;
       const shots = Math.min(C.combo.maxBullets, Math.round(n * Math.pow(C.combo.growth, comboN - 1)));
       if (comboN >= 2) {
@@ -370,10 +376,10 @@ window.Game = (function () {
     for (let i = balls.length - 1; i >= 0; i--) {
       const b = balls[i]; b.t += dt;
       if (b.t < 0) continue;
-      if (!b.fired) { b.fired = true; recoil = 1; core.Sfx.play('shoot'); core.buzz(15); }
-      const tx = b.z ? b.z.x : C.cannon.x, ty = b.z ? b.z.y - Z.types[b.z.type].r : 100;
+      if (!b.fired) { b.fired = true; recoil = 1; if (b.ci === 0) { core.Sfx.play('shoot'); core.buzz(15); } }
+      const tx = b.z ? b.z.x : b.cx, ty = b.z ? b.z.y - Z.types[b.z.type].r : 100;
       const p = Math.min(1, b.t / C.cannon.flight);
-      b.x = C.cannon.x + (tx - C.cannon.x) * p; b.y = (WALL_Y - 30) + (ty - (WALL_Y - 30)) * p;
+      b.x = b.cx + (tx - b.cx) * p; b.y = (WALL_Y - 30) + (ty - (WALL_Y - 30)) * p;
       if (p >= 1) {
         if (b.z) {
           b.z.pending = Math.max(0, b.z.pending - 1); b.z.hit = 0.2; core.Sfx.play('hit'); rings.push({ x: tx, y: ty, t: 0, lv: b.lv });
@@ -502,7 +508,7 @@ window.Game = (function () {
       const bw = 170, bx = 16, by = 168;
       stext(ctx, 'COMBO ' + comboN, bx + bw / 2, by - 8, 34, '#7ad7ff');
       ctx.fillStyle = 'rgba(0,0,0,.55)'; rrect(ctx, bx, by, bw, 10, 5); ctx.fill();
-      ctx.fillStyle = '#7ad7ff'; rrect(ctx, bx, by, Math.max(6, bw * comboT / C.combo.seconds), 10, 5); ctx.fill();
+      ctx.fillStyle = '#7ad7ff'; rrect(ctx, bx, by, Math.max(6, bw * comboT / comboMax()), 10, 5); ctx.fill();
       stext(ctx, '下次消除 子彈 ×' + Math.min(C.combo.maxBullets, Math.pow(C.combo.growth, comboN)), bx + bw / 2, by + 32, 20, '#cfeeff');
     }
     if (freezeLeft > 0) {
@@ -536,6 +542,7 @@ window.Game = (function () {
       ctx.save(); ctx.globalAlpha = a; ctx.translate(core.W / 2, 190);
       const sc = 1 + Math.max(0, 0.3 - t) * 1.2; ctx.scale(sc, sc);
       stext(ctx, 'LEVEL ' + lvBanner.n + '！', 0, 0, 64, '#ffe27a');
+      if (lvBanner.cannon) stext(ctx, '新增砲塔！　連消時間 +' + C.cannon.comboBonus + ' 秒', 0, 52, 28, '#9be8ff');
       ctx.restore();
     }
     if (notice) { ctx.save(); ctx.globalAlpha = Math.max(0, 1 - notice.t / 1.2); stext(ctx, notice.text, mx, my, 34, '#fff'); ctx.restore(); }
@@ -606,13 +613,15 @@ window.Game = (function () {
       ctx.fillStyle = 'rgba(255,40,40,' + (a * 0.25) + ')'; ctx.fillRect(0, C.zombieZone.top, core.W, WALL_Y - C.zombieZone.top);
     }
     // 砲台（開砲時後座力）
-    const cx = C.cannon.x, back = recoil * C.cannon.recoil;
-    if (ART.cannon) { ctx.imageSmoothingEnabled = false; ctx.drawImage(ART.cannon, 0, 0, 64, 64, cx - 48, WALL_Y - 84 + back, 96, 96); }
+    const back = recoil * C.cannon.recoil, csz = cannonCount() >= 4 ? 80 : 96;
+    cannonXs().forEach(function (cx) {
+    if (ART.cannon) { ctx.imageSmoothingEnabled = false; ctx.drawImage(ART.cannon, 0, 0, 64, 64, cx - csz / 2, WALL_Y - csz + 12 + back, csz, csz); }
     else {
       ctx.fillStyle = '#3a4650'; rrect(ctx, cx - 14, WALL_Y - 40 + back, 28, 44, 8); ctx.fill();
       ctx.fillStyle = '#56646f'; rrect(ctx, cx - 10, WALL_Y - 40 + back, 8, 40, 4); ctx.fill();
       ctx.fillStyle = '#2b333a'; ctx.beginPath(); ctx.arc(cx, WALL_Y + 4, 24, Math.PI, 0); ctx.fill();
     }
+    });
     // 砲彈
     balls.forEach(function (b) {
       if (b.t < 0) return;
@@ -699,7 +708,7 @@ window.Game = (function () {
       place: function (i, r, c) { const p = tray[i]; if (!p || p.used || !canPlace(p.shape, r, c)) return false; place(p, r, c); return true; },
       canPlace: function (i, r, c) { const p = tray[i]; return !!p && !p.used && canPlace(p.shape, r, c); },
       zombies: function () { return zombies; },
-      info: function () { return { comboN: comboN, comboT: comboT, revived: revived, ending: ending, score: score, level: level, lvScore: lvScore, roundTime: roundTime, freezeLeft: freezeLeft, bombMode: bombMode, used: used, hint: hint, every: spawnEvery(), step: stepMult(), bigBoost: bigBoost() }; },
+      info: function () { return { cannons: cannonCount(), comboMax: comboMax(), comboN: comboN, comboT: comboT, revived: revived, ending: ending, score: score, level: level, lvScore: lvScore, roundTime: roundTime, freezeLeft: freezeLeft, bombMode: bombMode, used: used, hint: hint, every: spawnEvery(), step: stepMult(), bigBoost: bigBoost() }; },
       setLevelState: function (lv, sc) { level = lv; lvScore = sc; syncLevel(true); },
       resetCombo: function () { comboN = 0; comboT = 0; }, newTray: function () { newTray(); return tray.length; }, slowLeft: function () { return slowT; },
       setCombo: function (n, t) { comboN = n; comboT = t; }, ballCount: function () { return balls.length; },
