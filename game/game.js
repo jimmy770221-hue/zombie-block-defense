@@ -8,7 +8,7 @@ window.Game = (function () {
   const Z = C.zombies, WALL_Y = C.zombieZone.wallY, L = C.levels, SH = C.shop;
   // v1.1 新增狀態
   let level = 1, lvScore = 0, roundTime = 0, lvBanner = null, lvKey = '';
-  let freezeLeft = 0, used = {}, bombMode = false, aim = null, theme = 'classic', hint = false, notice = null;
+  let comboN = 0, comboT = 0, freezeLeft = 0, used = {}, bombMode = false, aim = null, theme = 'classic', hint = false, notice = null;
   let itemBtns = {};
   function pal() { return theme === 'candy' ? C.candyColors : C.colors; }
 
@@ -93,7 +93,7 @@ window.Game = (function () {
              cx: slotX(i), cy: C.tray.y + 90, s: trayCell(shape) };
   }
   function newTray() {
-    tray = [0, 1, 2].map(function (i) { return makePiece(i, pickShape()); });
+    tray = C.tray.slotX.map(function (x, i) { return makePiece(i, pickShape()); });
   }
 
   // ---------- 格子 ----------
@@ -187,10 +187,11 @@ window.Game = (function () {
   }
   // 每消除 1 條，砲台打 1 發，擊退最前面的殭屍
   function fireLines(n) {
+    const gap = Math.min(C.cannon.shotGap, C.combo.volleySec / n);
     for (let i = 0; i < n; i++) {
       const z = frontZombie();
       if (z) { z.ty = Math.max(Z.spawnY, z.ty - Z.types[z.type].knock); z.pending++; }
-      balls.push({ t: -i * C.cannon.shotGap, z: z, fired: false, x: 0, y: 0 });
+      balls.push({ t: -i * gap, z: z, fired: false, x: 0, y: 0 });
     }
   }
   function wallBroken() { return zombies.some(function (z) { return z.ty >= WALL_Y; }); }
@@ -255,7 +256,13 @@ window.Game = (function () {
     score += gain; lvScore += gain;
     core.setScore(score);
     if (hint) { hint = false; core.Save.set('hintSeen', true); }     // 放了第一個方塊，新手提示就收起來
-    if (n > 0) fireLines(n);          // 先砲擊擊退
+    if (n > 0) {
+      // 限時連消：每次消除重新倒數，時間內再消除 combo+1；子彈 = 條數 × 2^(combo−1)，有上限
+      comboN = comboT > 0 ? comboN + 1 : 1; comboT = C.combo.seconds;
+      const shots = Math.min(C.combo.maxBullets, Math.round(n * Math.pow(C.combo.growth, comboN - 1)));
+      if (comboN >= 2) { addText(G.x + N * CELL / 2, G.y + N * CELL / 2 - 140, 'COMBO ' + comboN + '　子彈 ×' + shots, '#7ad7ff', 40); core.Sfx.play('combo'); }
+      fireLines(shots);               // 先砲擊擊退
+    }
     checkLevel();                     // 升級（獎勵擊退）
     advanceZombies();                 // 再前進一步
     if (warning()) core.Sfx.play('warn');
@@ -320,7 +327,7 @@ window.Game = (function () {
     grid = []; for (let i = 0; i < N; i++) grid.push(new Array(N).fill(null));
     score = 0; drag = null; flashes = []; particles = []; texts = []; shake = 0; stuckTimer = -1;
     zombies = []; balls = []; recoil = 0; revived = false; ending = false; sinceSpawn = 0; time = 0;
-    level = 1; lvScore = 0; roundTime = 0; lvBanner = null; lvKey = '';
+    level = 1; lvScore = 0; roundTime = 0; comboN = 0; comboT = 0; lvBanner = null; lvKey = '';
     freezeLeft = 0; used = {}; bombMode = false; aim = null; notice = null;
     theme = core.Save.get('theme'); hint = !core.Save.get('hintSeen');
     syncLevel(true); refreshItems();
@@ -332,6 +339,7 @@ window.Game = (function () {
 
   function update(dt) {
     time += dt; roundTime += dt;
+    if (comboT > 0) { comboT -= dt; if (comboT <= 0) { comboT = 0; comboN = 0; } }
     syncLevel(false);
     if (lvBanner) { lvBanner.t += dt; if (lvBanner.t > L.bannerSec) lvBanner = null; }
     if (notice) { notice.t += dt; if (notice.t > 1.2) notice = null; }
@@ -471,6 +479,13 @@ window.Game = (function () {
   }
   function drawOverlays(ctx) {
     const mx = G.x + N * CELL / 2, my = G.y + N * CELL / 2;
+    if (comboT > 0 && comboN >= 1) {                         // 連消倒數條
+      const bw = 170, bx = 16, by = 168;
+      stext(ctx, 'COMBO ' + comboN, bx + bw / 2, by - 8, 34, '#7ad7ff');
+      ctx.fillStyle = 'rgba(0,0,0,.55)'; rrect(ctx, bx, by, bw, 10, 5); ctx.fill();
+      ctx.fillStyle = '#7ad7ff'; rrect(ctx, bx, by, Math.max(6, bw * comboT / C.combo.seconds), 10, 5); ctx.fill();
+      stext(ctx, '下次消除 子彈 ×' + Math.min(C.combo.maxBullets, Math.pow(C.combo.growth, comboN)), bx + bw / 2, by + 32, 20, '#cfeeff');
+    }
     if (freezeLeft > 0) {
       ctx.fillStyle = 'rgba(120,200,255,0.18)'; ctx.fillRect(0, 0, C.ui.stripX, WALL_Y);
       stext(ctx, '❄ 冰凍中　剩 ' + freezeLeft + ' 次', 235, WALL_Y - 14, 26, '#bfe8ff');
@@ -631,6 +646,7 @@ window.Game = (function () {
     shapes.forEach(function (o, i) { o.hard = !!C.shapes[i].hard || o.cells.length >= L.bigCells; });
     totalW = shapes.reduce(function (a, s) { return a + s.weight; }, 0);
     // 升級音效
+    core.Sfx.presets.combo = function () { core.Sfx.tone(880, 0.08, 'square', 0.14); core.Sfx.tone(1175, 0.14, 'square', 0.16, null, 0.08); };
     core.Sfx.presets.levelup = function () {
       core.Sfx.tone(523, 0.1, 'square', 0.16); core.Sfx.tone(659, 0.1, 'square', 0.16, null, 0.1); core.Sfx.tone(784, 0.26, 'square', 0.2, null, 0.2);
     };
@@ -655,8 +671,10 @@ window.Game = (function () {
       place: function (i, r, c) { const p = tray[i]; if (!p || p.used || !canPlace(p.shape, r, c)) return false; place(p, r, c); return true; },
       canPlace: function (i, r, c) { const p = tray[i]; return !!p && !p.used && canPlace(p.shape, r, c); },
       zombies: function () { return zombies; },
-      info: function () { return { revived: revived, ending: ending, score: score, level: level, lvScore: lvScore, roundTime: roundTime, freezeLeft: freezeLeft, bombMode: bombMode, used: used, hint: hint, every: spawnEvery(), step: stepMult(), bigBoost: bigBoost() }; },
+      info: function () { return { comboN: comboN, comboT: comboT, revived: revived, ending: ending, score: score, level: level, lvScore: lvScore, roundTime: roundTime, freezeLeft: freezeLeft, bombMode: bombMode, used: used, hint: hint, every: spawnEvery(), step: stepMult(), bigBoost: bigBoost() }; },
       setLevelState: function (lv, sc) { level = lv; lvScore = sc; syncLevel(true); },
+      resetCombo: function () { comboN = 0; comboT = 0; },
+      setCombo: function (n, t) { comboN = n; comboT = t; }, ballCount: function () { return balls.length; },
       rotate: function (i) { if (tray[i] && !tray[i].used) rotatePiece(tray[i]); }, detonate: detonate, cellAt: cellAt,
       levelUp: levelUp, types: function () { return Object.keys(Z.types).filter(function (k) { return level >= Z.types[k].unlockLevel; }); }, shapeBoost: function () { return bigBoost(); },
       setZombies: function (list) { zombies = []; list.forEach(function (o) { spawnZombie(o.type); const z = zombies[zombies.length - 1]; z.ty = o.ty; z.y = o.ty; }); },
