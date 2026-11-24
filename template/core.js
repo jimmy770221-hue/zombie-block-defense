@@ -216,7 +216,7 @@
         '<button class="btn gray half" id="btn-board">🏆 排行榜</button>' +
       '</div>' +
       '<div class="btn-row">' +
-        '<button class="btn gold half" id="btn-daily">📅 每日獎勵<span id="dl-dot" class="dot hidden">!</span></button>' +
+        '<button class="btn gold half" id="btn-daily">📅每日獎勵<span id="dl-dot" class="dot hidden">!</span></button>' +
         '<button class="btn gray half" id="btn-set" aria-label="設定"><span class="emo">⚙ </span>' + artImg('icon_gear') + '設定</button>' +
       '</div>' +
       '<div id="ver"></div>' +

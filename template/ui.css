@@ -95,7 +95,7 @@ body {
 #st-stats > div { flex: 1; background: rgba(0,0,0,.5); border-radius: 16px; padding: 10px 6px; display: flex; flex-direction: column; gap: 2px; }
 #st-stats span { font-size: 20px; color: rgba(255,255,255,.7); }
 #st-stats b { font-size: 34px; color: #ffe27a; }
-.btn.half { min-width: 0; flex: 1; font-size: 28px; padding: 16px 10px; }
+.btn.half { min-width: 0; flex: 1; font-size: 26px; padding: 16px 6px; white-space: nowrap; letter-spacing: 0; }
 #scr-start .btn-row { width: 100%; margin-top: 0; }
 
 /* 商店、排行榜 */
@@ -147,7 +147,8 @@ body {
 .art .btn.gray { border-image-source: url(../assets/btn_gray.png?v=20261125b); background: none; box-shadow: none; }
 .art .btn.gray:active { border-image-source: url(../assets/btn_gray_down.png?v=20261125b); box-shadow: none; }
 .art .btn.small { min-width: 0; min-height: 56px; border-width: 18px; border-image-width: 18px; padding: 0 4px; font-size: 24px; }
-.art .btn.half { padding: 0 6px; }
+.art .btn.half { padding: 0 2px; }
+#btn-daily, #btn-set { font-size: 22px; }
 .art .btn .ic { height: 32px; width: auto; }
 .art .btn .ic.coin { height: 26px; }
 .art .btn .ic.tg { height: 40px; }
