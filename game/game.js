@@ -7,7 +7,7 @@ window.Game = (function () {
   let zombies, balls, recoil, revived, ending, sinceSpawn, time;
   const Z = C.zombies, WALL_Y = C.zombieZone.wallY, L = C.levels, SH = C.shop;
   // v1.1 新增狀態
-  let level = 1, lvScore = 0, lvTime = 0, roundTime = 0, lvBanner = null, lvKey = '';
+  let level = 1, lvScore = 0, roundTime = 0, lvBanner = null, lvKey = '';
   let freezeLeft = 0, used = {}, bombMode = false, aim = null, theme = 'classic', hint = false, notice = null;
   let itemBtns = {};
   function pal() { return theme === 'candy' ? C.candyColors : C.colors; }
@@ -104,6 +104,16 @@ window.Game = (function () {
     }
     return true;
   }
+  // 順時針轉 90 度（點托盤上的方塊一下）
+  function rotShape(sh) {
+    return { cells: sh.cells.map(function (c) { return [c[1], sh.h - 1 - c[0]]; }), w: sh.h, h: sh.w, weight: sh.weight, hard: sh.hard };
+  }
+  // 任何一個轉向放得下就算有空間
+  function anyFitRot(shape) {
+    let sh = shape;
+    for (let k = 0; k < 4; k++) { if (anyFit(sh)) return true; sh = rotShape(sh); }
+    return false;
+  }
   function anyFit(shape) {
     for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (canPlace(shape, r, c)) return true;
     return false;
@@ -158,16 +168,16 @@ window.Game = (function () {
 
   // ---------- 等級 ----------
   function syncLevel(force) {
-    const prog = Math.max(lvScore / L.scoreNeed, lvTime / L.secondsNeed);
+    const prog = lvScore / L.scoreNeed;
     const key = level + ':' + Math.round(Math.min(1, prog) * 100);
     if (force || key !== lvKey) { lvKey = key; core.setLevel(level, prog); }
   }
   function checkLevel() {
     if (ending) return;
-    if (lvScore >= L.scoreNeed || lvTime >= L.secondsNeed) levelUp();
+    if (lvScore >= L.scoreNeed) levelUp();
   }
   function levelUp() {
-    level++; lvScore = 0; lvTime = 0;                      // 計時重來
+    level++; lvScore = 0;
     zombies.forEach(function (z) { z.ty = Math.max(Z.spawnY, z.ty - L.knockback); });   // 獎勵：全部往後退
     if (level % L.waveEvery === 0) for (let i = 0; i < L.waveExtra; i++) spawnZombie();    // 第 5、10、15… 級：一次多來幾隻
     lvBanner = { t: 0, n: level };
@@ -205,7 +215,7 @@ window.Game = (function () {
     balls = []; shake = 0.3;
     core.Sfx.play('clear'); core.buzz(60);
     addText(core.W / 2, G.y + N * CELL / 2, '復活！', '#9be86b', 64);
-    for (let i = 0; i < 30 && tray.filter(function (p) { return !p.used; }).every(function (p) { return !anyFit(p.shape); }); i++) newTray();
+    for (let i = 0; i < 30 && tray.filter(function (p) { return !p.used; }).every(function (p) { return !anyFitRot(p.shape); }); i++) newTray();
     checkStuck();
   }
 
@@ -257,7 +267,7 @@ window.Game = (function () {
   }
   function checkStuck() {
     const left = tray.filter(function (p) { return !p.used; });
-    stuckTimer = left.every(function (p) { return !anyFit(p.shape); }) ? 0.7 : -1;
+    stuckTimer = left.every(function (p) { return !anyFitRot(p.shape); }) ? 0.7 : -1;
   }
 
   // ---------- 道具（每局每種最多用 1 次）----------
@@ -282,7 +292,7 @@ window.Game = (function () {
       core.Items.use('shuffle'); used.shuffle = true;
       for (let k = 0; k < 10; k++) {
         slots.forEach(function (sl) { tray[sl] = makePiece(sl, pickShape()); });
-        if (tray.some(function (p) { return !p.used && anyFit(p.shape); })) break;
+        if (tray.some(function (p) { return !p.used && anyFitRot(p.shape); })) break;
       }
       core.Sfx.play('place'); checkStuck();
     }
@@ -310,7 +320,7 @@ window.Game = (function () {
     grid = []; for (let i = 0; i < N; i++) grid.push(new Array(N).fill(null));
     score = 0; drag = null; flashes = []; particles = []; texts = []; shake = 0; stuckTimer = -1;
     zombies = []; balls = []; recoil = 0; revived = false; ending = false; sinceSpawn = 0; time = 0;
-    level = 1; lvScore = 0; lvTime = 0; roundTime = 0; lvBanner = null; lvKey = '';
+    level = 1; lvScore = 0; roundTime = 0; lvBanner = null; lvKey = '';
     freezeLeft = 0; used = {}; bombMode = false; aim = null; notice = null;
     theme = core.Save.get('theme'); hint = !core.Save.get('hintSeen');
     syncLevel(true); refreshItems();
@@ -322,7 +332,6 @@ window.Game = (function () {
 
   function update(dt) {
     time += dt; roundTime += dt;
-    if (!ending) { lvTime += dt; checkLevel(); }
     syncLevel(false);
     if (lvBanner) { lvBanner.t += dt; if (lvBanner.t > L.bannerSec) lvBanner = null; }
     if (notice) { notice.t += dt; if (notice.t > 1.2) notice = null; }
@@ -582,6 +591,11 @@ window.Game = (function () {
     p.shape.cells.forEach(function (c) { block(ctx, left + c[1] * s, top + c[0] * s, s, p.color); });
   }
 
+  function rotatePiece(p) {
+    p.shape = rotShape(p.shape); p.s *= 0.8;               // 縮一下再彈回，當作轉動的動畫
+    core.Sfx.play('place'); core.buzz(8);
+  }
+
   function onPointer(type, x, y) {
     if (bombMode) {                                         // 炸彈瞄準中：點格子引爆
       if (type === 'down' && y >= C.tray.topY) { bombMode = false; aim = null; refreshItems(); }   // 去拖方塊就取消瞄準
@@ -591,13 +605,17 @@ window.Game = (function () {
       if (drag || y < C.tray.topY) return;
       for (let i = 0; i < tray.length; i++) {
         const p = tray[i];
-        if (!p.used && Math.abs(x - slotX(p.slot)) < C.tray.slotW / 2) { drag = { piece: p, px: x, py: y }; core.Sfx.play('click'); return; }
+        if (!p.used && Math.abs(x - slotX(p.slot)) < C.tray.slotW / 2) { drag = { piece: p, px: x, py: y, sx: x, sy: y, moved: false }; core.Sfx.play('click'); return; }
       }
     } else if (type === 'move') {
-      if (drag) { drag.px = x; drag.py = y; }
+      if (drag) { drag.px = x; drag.py = y; if (Math.abs(x - drag.sx) + Math.abs(y - drag.sy) > 14) drag.moved = true; }
     } else if (type === 'up') {
       if (!drag) return;
-      const p = drag.piece, t = targetCell(p, x, y);
+      const p = drag.piece;
+      if (!drag.moved && Math.abs(x - drag.sx) + Math.abs(y - drag.sy) <= 14) {   // 只是點一下：旋轉
+        drag = null; rotatePiece(p); return;
+      }
+      const t = targetCell(p, x, y);
       drag = null;
       if (canPlace(p.shape, t.r, t.c)) {
         // 直接落到格子位置
@@ -637,9 +655,9 @@ window.Game = (function () {
       place: function (i, r, c) { const p = tray[i]; if (!p || p.used || !canPlace(p.shape, r, c)) return false; place(p, r, c); return true; },
       canPlace: function (i, r, c) { const p = tray[i]; return !!p && !p.used && canPlace(p.shape, r, c); },
       zombies: function () { return zombies; },
-      info: function () { return { revived: revived, ending: ending, score: score, level: level, lvScore: lvScore, lvTime: lvTime, roundTime: roundTime, freezeLeft: freezeLeft, bombMode: bombMode, used: used, hint: hint, every: spawnEvery(), step: stepMult(), bigBoost: bigBoost() }; },
-      setLevelState: function (lv, sc, tm) { level = lv; lvScore = sc; lvTime = tm; syncLevel(true); },
-      detonate: detonate, cellAt: cellAt,
+      info: function () { return { revived: revived, ending: ending, score: score, level: level, lvScore: lvScore, roundTime: roundTime, freezeLeft: freezeLeft, bombMode: bombMode, used: used, hint: hint, every: spawnEvery(), step: stepMult(), bigBoost: bigBoost() }; },
+      setLevelState: function (lv, sc) { level = lv; lvScore = sc; syncLevel(true); },
+      rotate: function (i) { if (tray[i] && !tray[i].used) rotatePiece(tray[i]); }, detonate: detonate, cellAt: cellAt,
       levelUp: levelUp, types: function () { return Object.keys(Z.types).filter(function (k) { return level >= Z.types[k].unlockLevel; }); }, shapeBoost: function () { return bigBoost(); },
       setZombies: function (list) { zombies = []; list.forEach(function (o) { spawnZombie(o.type); const z = zombies[zombies.length - 1]; z.ty = o.ty; z.y = o.ty; }); },
       geom: function () { return { G: G, CELL: CELL, tray: C.tray, liftY: C.drag.liftY }; }

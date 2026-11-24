@@ -46,7 +46,6 @@ window.CONFIG = {
   // ===== 等級（無限關卡）=====
   levels: {
     scoreNeed: 150,           // 本等級內拿到幾分就升級
-    secondsNeed: 45,          // 或本等級玩滿幾秒就升級（暫停、看廣告不算）
     spawnEveryStart: 8,       // 每放幾個方塊來新殭屍（1 級）
     spawnEveryLevels: 2,      // 每幾級，間隔少 1
     spawnEveryMin: 3,         // 最快每幾個方塊來新殭屍
