@@ -41,9 +41,9 @@ window.CONFIG = {
     laneNarrow: 0.45,         // 景深：最遠處賽道間隔只剩這個比例（沿著遠處的路收攏），越近越展開
     // step＝每放一個方塊前進幾像素；knock＝被砲彈打中往後退幾像素
     types: {
-      normal: { r: 26, step: 18.6, knock: 234, unlockLevel: 1, weight: 6, color: '#7ed957' },
-      fat:    { r: 34, step: 12.5, knock: 139, unlockLevel: 5, weight: 2, color: '#5fbf45' },
-      fast:   { r: 21, step: 34.1, knock: 234, unlockLevel: 3, weight: 2, color: '#a6ee6a' }
+      normal: { hp: 2, rewardScore: 5, rewardCoins: 1, r: 26, step: 18.6, knock: 234, unlockLevel: 1, weight: 6, color: '#7ed957' },
+      fat:    { hp: 5, rewardScore: 15, rewardCoins: 3, r: 34, step: 12.5, knock: 139, unlockLevel: 5, weight: 2, color: '#5fbf45' },
+      fast:   { hp: 1, rewardScore: 8, rewardCoins: 1, r: 21, step: 34.1, knock: 234, unlockLevel: 3, weight: 2, color: '#a6ee6a' }
     }
   },
 
@@ -62,6 +62,11 @@ window.CONFIG = {
     bannerSec: 1.2,           // 「LEVEL N！」顯示秒數
     bigCells: 5,              // 幾格以上算大方塊（難放）
     bigBoostPerLevel: 0.1,    // 大方塊／難放方塊的機率，每級多 10%
+    moreFrom: 5,              // 從這一級開始，每 moreEvery 級殭屍變多一次
+    moreEvery: 5,
+    moreMax: 1,               // 每次變多：畫面上限 +1
+    moreSpawn: 1,             // 每次變多：出新殭屍的間隔 −1（最短 moreSpawnMin）
+    moreSpawnMin: 2,
     bigBoostMax: 2            // 最多變成原本的幾倍
   },
 
@@ -100,6 +105,8 @@ window.CONFIG = {
   },
 
   // ===== 砲台 =====
+  // 塔的進化：前 5 座是箭塔（10/20/30/40 級各多 1 座），45~65 級每 5 級 1 座箭塔→砲塔，70~90 級每 5 級 1 座砲塔→機槍塔
+  tower: { arrowDmg: 1, cannonDmg: 3, mgDmg: 3, mgShots: 5, mgGap: 0.05, cannonFrom: 45, mgFrom: 70, every: 5 },
   cannon: { x: 270, shotGap: 0.14, flight: 0.2, recoil: 16,
             perLevels: 10, max: 5, spacing: 76, comboBonus: 2 },   // 每 10 級多 1 個砲塔（最多 5 個）；每多 1 個，combo 倒數 +2 秒
 

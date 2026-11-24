@@ -143,13 +143,14 @@ window.Game = (function () {
     return names[0];
   }
   function spawnZombie(type) {
-    if (zombies.length >= Z.max) return;
+    if (zombies.length >= maxZombies()) return;
     const free = Z.lanes.filter(function (x) {
       return zombies.every(function (z) { return !(Math.abs(z.x - x) < 30 && z.ty < Z.spawnY + Z.spawnGap); });
     });
     if (!free.length) return;
     const x = free[rnd(free.length)] + rnd(21) - 10;
-    zombies.push({ type: type || pickType(), x: x, ty: Z.spawnY, y: Z.spawnY - 50, hit: 0, pending: 0, ph: Math.random() * 6 });
+    const tp = type || pickType();
+    zombies.push({ type: tp, hp: Z.types[tp].hp || 1, x: x, ty: Z.spawnY, y: Z.spawnY - 50, hit: 0, pending: 0, ph: Math.random() * 6 });
   }
   // 前進距離倍率：每級 +0.04，超過 15 級後每級 +0.02，不封頂
   function stepMult() {
@@ -157,10 +158,15 @@ window.Game = (function () {
     return 1 + L.stepPerLevel * (L.lateFrom - 1) + L.stepPerLevelLate * (level - L.lateFrom);
   }
   // 每放幾個方塊來新殭屍：8 起跳，每 2 級少 1，最少 3
-  function spawnEvery() { return Math.max(L.spawnEveryMin, L.spawnEveryStart - Math.floor((level - 1) / L.spawnEveryLevels)); }
+  function moreSteps() { return level >= L.moreFrom ? Math.floor((level - L.moreFrom) / L.moreEvery) + 1 : 0; }   // 5、10、15…級各算一次
+  function maxZombies() { return Z.max + L.moreMax * moreSteps(); }
+  function spawnEvery() {
+    const base = Math.max(L.spawnEveryMin, L.spawnEveryStart - Math.floor((level - 1) / L.spawnEveryLevels)), m = moreSteps();
+    return m > 0 ? Math.max(Math.min(base, L.moreSpawnMin), base - L.moreSpawn * m) : base;
+  }
   function frontZombie() {
     let f = null;
-    zombies.forEach(function (z) { if (!f || z.ty > f.ty) f = z; });
+    zombies.forEach(function (z) { if (z.hp > 0 && (!f || z.ty > f.ty)) f = z; });
     return f;
   }
   // 每放一個方塊，殭屍前進一步；到間隔就來新殭屍
@@ -185,26 +191,57 @@ window.Game = (function () {
   // 砲塔數量：1 個起，每 perLevels 級多 1 個，最多 max 個
   function cannonCount() { return Math.min(C.cannon.max, 1 + Math.floor(level / C.cannon.perLevels)); }
   function cannonXs() { const k = cannonCount(); return Array.from({ length: k }, function (_, i) { return C.cannon.x + (i - (k - 1) / 2) * C.cannon.spacing; }); }
+  // 每座塔的種類：箭塔 → 砲塔 → 機槍塔（由左到右一座一座進化）
+  function towerKinds() {
+    const T = C.tower, k = cannonCount();
+    const cn = level >= T.cannonFrom ? Math.min(C.cannon.max, Math.floor((level - T.cannonFrom) / T.every) + 1) : 0;
+    const mg = level >= T.mgFrom ? Math.min(C.cannon.max, Math.floor((level - T.mgFrom) / T.every) + 1) : 0;
+    return Array.from({ length: k }, function (_, i) { return i < mg ? 'mg' : (i < cn ? 'cannon' : 'arrow'); });
+  }
   function comboMax() { return C.combo.seconds + C.cannon.comboBonus * (cannonCount() - 1); }
   function levelUp() {
     level++; lvScore = 0;
     zombies.forEach(function (z) { z.ty = Math.max(Z.spawnY, z.ty - L.knockback); });   // 獎勵：全部往後退
     if (level % L.waveEvery === 0) for (let i = 0; i < L.waveExtra; i++) spawnZombie();    // 第 5、10、15… 級：一次多來幾隻
-    lvBanner = { t: 0, n: level, cannon: level % C.cannon.perLevels === 0 && level / C.cannon.perLevels < C.cannon.max };
+    const T = C.tower, evo = level >= T.cannonFrom && level < T.mgFrom && (level - T.cannonFrom) % T.every === 0 ? '箭塔進化成砲塔！' :
+      (level >= T.mgFrom && level < T.mgFrom + T.every * C.cannon.max && (level - T.mgFrom) % T.every === 0 ? '砲塔進化成機槍塔！' : '');
+    lvBanner = { t: 0, n: level, cannon: level % C.cannon.perLevels === 0 && level / C.cannon.perLevels < C.cannon.max, evo: evo };
     core.Sfx.play('levelup'); core.buzz(30);
     core.track('level_up', { level: level, score: score, seconds: Math.round(roundTime) });
     syncLevel(true);
   }
-  // 每消除 1 條，砲台打 1 發，擊退最前面的殭屍
+  // 每消除 1 條，每座塔打一輪：箭塔 1 箭（傷害 1）、砲塔 1 砲彈（傷害 3）、機槍塔連射 5 發（每發傷害 3）
+  function shootAt(dmg) {
+    const z = frontZombie();
+    if (z) { z.hp -= dmg; z.pending++; if (z.hp > 0) z.ty = Math.max(Z.spawnY, z.ty - Z.types[z.type].knock); }
+    return z;
+  }
   function fireLines(n, lv) {
-    const gap = Math.min(C.cannon.shotGap, C.combo.volleySec / n), xs = cannonXs();
+    const T = C.tower, gap = Math.min(C.cannon.shotGap, C.combo.volleySec / n), xs = cannonXs(), kinds = towerKinds();
     for (let i = 0; i < n; i++) {
-      xs.forEach(function (cx, ci) {                 // 每個砲塔各打一輪
-        const z = frontZombie();
-        if (z) { z.ty = Math.max(Z.spawnY, z.ty - Z.types[z.type].knock); z.pending++; }
-        balls.push({ t: -i * gap, z: z, fired: false, x: 0, y: 0, lv: lv || 1, cx: cx, ci: ci });
+      xs.forEach(function (cx, ci) {                 // 每座塔各打一輪
+        const kind = kinds[ci];
+        if (kind === 'mg') {
+          for (let m = 0; m < T.mgShots; m++) balls.push({ t: -i * gap - m * T.mgGap, z: shootAt(T.mgDmg), fired: false, x: 0, y: 0, lv: lv || 1, cx: cx, ci: ci, kind: kind });
+        } else {
+          balls.push({ t: -i * gap, z: shootAt(kind === 'cannon' ? T.cannonDmg : T.arrowDmg), fired: false, x: 0, y: 0, lv: lv || 1, cx: cx, ci: ci, kind: kind });
+        }
       });
     }
+  }
+  // 殭屍被打死：加分＋直接給金幣
+  function killZombie(z) {
+    const i = zombies.indexOf(z); if (i < 0) return;
+    zombies.splice(i, 1);
+    const T = Z.types[z.type], x = laneX(z.x, z.y), y = z.y - T.r * depthScale(z.y);
+    score += T.rewardScore; lvScore += T.rewardScore; core.setScore(score);
+    core.Save.add('coins', T.rewardCoins);
+    addText(x, y - 10, '+' + T.rewardScore + '　💰' + T.rewardCoins, '#ffe27a', 30);
+    for (let k = 0; k < 14; k++) {
+      const a = Math.random() * Math.PI * 2, v = 120 + Math.random() * 200;
+      particles.push({ x: x, y: y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 80, t: 0, life: 0.5, css: T.color, s: 9 });
+    }
+    core.Sfx.play('coin'); checkLevel();
   }
   function wallBroken() { return zombies.some(function (z) { return z.ty >= WALL_Y; }); }
   function warning() { const f = frontZombie(); return !!f && f.ty >= WALL_Y - Z.warnDist; }
@@ -224,7 +261,7 @@ window.Game = (function () {
     for (let r = off; r < off + sz; r++) for (let c = off; c < off + sz; c++) {
       if (grid[r][c]) { flashes.push({ r: r, c: c, color: grid[r][c].color, t: 0 }); grid[r][c] = null; }
     }
-    zombies.forEach(function (z) { z.ty = Z.spawnY; z.pending = 0; });   // 全部擊退到最上方
+    zombies = zombies.filter(function (z) { return z.hp > 0; }); zombies.forEach(function (z) { z.ty = Z.spawnY; z.pending = 0; });   // 全部擊退到最上方
     balls = []; shake = 0.3;
     core.Sfx.play('clear'); core.buzz(60);
     addText(core.W / 2, G.y + N * CELL / 2, '復活！', '#9be86b', 64);
@@ -382,7 +419,7 @@ window.Game = (function () {
       b.x = b.cx + (tx - b.cx) * p; b.y = (WALL_Y - 30) + (ty - (WALL_Y - 30)) * p;
       if (p >= 1) {
         if (b.z) {
-          b.z.pending = Math.max(0, b.z.pending - 1); b.z.hit = 0.2; core.Sfx.play('hit'); rings.push({ x: tx, y: ty, t: 0, lv: b.lv });
+          b.z.pending = Math.max(0, b.z.pending - 1); b.z.hit = 0.2; if (b.z.hp <= 0 && b.z.pending === 0) killZombie(b.z); core.Sfx.play('hit'); rings.push({ x: tx, y: ty, t: 0, lv: b.lv });
           for (let k = 0; k < 8; k++) {
             const a = Math.random() * Math.PI * 2, v = 100 + Math.random() * 160;
             particles.push({ x: tx, y: ty, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 60, t: 0, life: 0.35, css: '#fff3a0', s: 7 });
@@ -542,7 +579,8 @@ window.Game = (function () {
       ctx.save(); ctx.globalAlpha = a; ctx.translate(core.W / 2, 190);
       const sc = 1 + Math.max(0, 0.3 - t) * 1.2; ctx.scale(sc, sc);
       stext(ctx, 'LEVEL ' + lvBanner.n + '！', 0, 0, 64, '#ffe27a');
-      if (lvBanner.cannon) stext(ctx, '新增砲塔！　連消時間 +' + C.cannon.comboBonus + ' 秒', 0, 52, 28, '#9be8ff');
+      if (lvBanner.evo) stext(ctx, lvBanner.evo, 0, 52, 30, '#ffd54a');
+      else if (lvBanner.cannon) stext(ctx, '新增箭塔！　連消時間 +' + C.cannon.comboBonus + ' 秒', 0, 52, 28, '#9be8ff');
       ctx.restore();
     }
     if (notice) { ctx.save(); ctx.globalAlpha = Math.max(0, 1 - notice.t / 1.2); stext(ctx, notice.text, mx, my, 34, '#fff'); ctx.restore(); }
@@ -603,13 +641,44 @@ window.Game = (function () {
     if (z.hit > 0) { ctx.fillStyle = 'rgba(255,255,255,' + Math.min(0.8, z.hit * 4) + ')'; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); }
     ctx.restore();
   }
+  function drawHp(ctx, z) {
+    const T = Z.types[z.type], mx = T.hp || 1; if (mx <= 1 || z.hp >= mx || z.hp <= 0) return;   // 只有受傷的才顯示血條
+    const s = depthScale(z.y), w = 44 * s, x = laneX(z.x, z.y) - w / 2, y = z.y - T.r * 2 * s - 12 * s;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - 1, y - 1, w + 2, 8 * s + 2);
+    ctx.fillStyle = '#ff5a4a'; ctx.fillRect(x, y, w * Math.max(0, z.hp) / mx, 8 * s);
+  }
+  function drawTower(ctx, kind, cx, back, csz) {
+    const y0 = WALL_Y;
+    if (ART[kind]) { ctx.imageSmoothingEnabled = false; ctx.drawImage(ART[kind], 0, 0, 64, 64, cx - csz / 2, y0 - csz + 12 + back, csz, csz); return; }
+    if (kind === 'cannon' && ART.cannon) { ctx.imageSmoothingEnabled = false; ctx.drawImage(ART.cannon, 0, 0, 64, 64, cx - csz / 2, y0 - csz + 12 + back, csz, csz); return; }
+    ctx.save(); ctx.translate(cx, y0);
+    if (kind === 'arrow') {                                       // 木頭箭塔：木架＋弓＋箭
+      ctx.fillStyle = '#6b4a2b'; ctx.fillRect(-18, -34, 6, 38); ctx.fillRect(12, -34, 6, 38); ctx.fillRect(-18, -14, 36, 5);
+      ctx.fillStyle = '#8a6238'; ctx.fillRect(-22, -42, 44, 9); ctx.fillStyle = '#5a3d22'; ctx.fillRect(-22, -36, 44, 3);
+      ctx.translate(0, back * 0.5);
+      ctx.strokeStyle = '#c89b5a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, -52, 17, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
+      ctx.strokeStyle = '#eee'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(-16, -48); ctx.lineTo(16, -48); ctx.stroke();
+      ctx.strokeStyle = '#e8d9a8'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, -48); ctx.lineTo(0, -74); ctx.stroke();
+      ctx.fillStyle = '#d8d8d8'; ctx.beginPath(); ctx.moveTo(0, -80); ctx.lineTo(-4, -72); ctx.lineTo(4, -72); ctx.fill();
+    } else {                                                      // 機槍塔：鋼板底座＋三管槍
+      ctx.fillStyle = '#3b434b'; rrect(ctx, -22, -26, 44, 30, 6); ctx.fill();
+      ctx.fillStyle = '#5a6670'; ctx.fillRect(-18, -22, 10, 22);
+      ctx.fillStyle = '#2b333a'; ctx.beginPath(); ctx.arc(0, 0, 26, Math.PI, 0); ctx.fill();
+      ctx.translate(0, back);
+      ctx.fillStyle = '#4a545d'; rrect(ctx, -16, -52, 32, 30, 6); ctx.fill();
+      ctx.fillStyle = '#222'; [-10, 0, 10].forEach(function (dx) { ctx.fillRect(dx - 3, -78, 6, 28); });
+      ctx.fillStyle = '#ffd54a'; [-10, 0, 10].forEach(function (dx) { ctx.fillRect(dx - 3, -80, 6, 4); });
+      ctx.fillStyle = '#e04a3a'; ctx.fillRect(-4, -46, 8, 6);
+    }
+    ctx.restore();
+  }
   function drawZone(ctx) {
     if (ART.bg) { ctx.imageSmoothingEnabled = false; ctx.drawImage(ART.bg, 0, 0, 256, 192, 0, C.zombieZone.top, core.W, WALL_Y - C.zombieZone.top); }
     ctx.fillStyle = ART.bg ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.18)';
     ctx.fillRect(0, C.zombieZone.top, core.W, WALL_Y - C.zombieZone.top);
     ctx.fillStyle = 'rgba(0,0,0,0.38)';                                        // 右邊按鈕欄（殭屍不會走到這裡）
     ctx.fillRect(C.ui.stripX, C.zombieZone.top, core.W - C.ui.stripX, WALL_Y - C.zombieZone.top);
-    zombies.slice().sort(function (a, b) { return a.y - b.y; }).forEach(function (z) { drawZombie(ctx, z); });
+    zombies.slice().sort(function (a, b) { return a.y - b.y; }).forEach(function (z) { drawZombie(ctx, z); drawHp(ctx, z); });
     // 圍牆
     if (ART.wall) { ctx.imageSmoothingEnabled = false; for (let i = 0; i < 8; i++) ctx.drawImage(ART.wall, 0, 8, 64, 52, i * 67.5, WALL_Y - 6, 68, 44); }
     else { ctx.fillStyle = '#8a6a43'; ctx.fillRect(0, WALL_Y, core.W, 14); ctx.fillStyle = '#b28a58'; ctx.fillRect(0, WALL_Y, core.W, 4); }
@@ -618,19 +687,24 @@ window.Game = (function () {
       ctx.fillStyle = 'rgba(255,40,40,' + a + ')'; ctx.fillRect(0, WALL_Y - 4, core.W, 22);
       ctx.fillStyle = 'rgba(255,40,40,' + (a * 0.25) + ')'; ctx.fillRect(0, C.zombieZone.top, core.W, WALL_Y - C.zombieZone.top);
     }
-    // 砲台（開砲時後座力）
-    const back = recoil * C.cannon.recoil, csz = cannonCount() >= 4 ? 80 : 96;
-    cannonXs().forEach(function (cx) {
-    if (ART.cannon) { ctx.imageSmoothingEnabled = false; ctx.drawImage(ART.cannon, 0, 0, 64, 64, cx - csz / 2, WALL_Y - csz + 12 + back, csz, csz); }
-    else {
-      ctx.fillStyle = '#3a4650'; rrect(ctx, cx - 14, WALL_Y - 40 + back, 28, 44, 8); ctx.fill();
-      ctx.fillStyle = '#56646f'; rrect(ctx, cx - 10, WALL_Y - 40 + back, 8, 40, 4); ctx.fill();
-      ctx.fillStyle = '#2b333a'; ctx.beginPath(); ctx.arc(cx, WALL_Y + 4, 24, Math.PI, 0); ctx.fill();
-    }
-    });
+    // 塔（開砲時後座力）：箭塔／砲塔／機槍塔
+    const back = recoil * C.cannon.recoil, csz = cannonCount() >= 4 ? 80 : 96, kinds = towerKinds();
+    cannonXs().forEach(function (cx, ci) { drawTower(ctx, kinds[ci], cx, back, csz); });
     // 砲彈
     balls.forEach(function (b) {
       if (b.t < 0) return;
+      if (b.kind === 'arrow') {                                   // 箭：細長、朝目標飛
+        const dx = b.x - b.cx, dy = b.y - (WALL_Y - 30), len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+        ctx.strokeStyle = '#e8d9a8'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(b.x - ux * 26, b.y - uy * 26); ctx.lineTo(b.x, b.y); ctx.stroke();
+        ctx.fillStyle = '#d8d8d8'; ctx.beginPath(); ctx.arc(b.x, b.y, 4.5, 0, Math.PI * 2); ctx.fill();
+        return;
+      }
+      if (b.kind === 'mg') {                                      // 機槍子彈：小而亮
+        ctx.fillStyle = '#fff3a0'; ctx.beginPath(); ctx.arc(b.x, b.y, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 0.4; ctx.fillStyle = '#ffb347'; ctx.beginPath(); ctx.arc(b.x, b.y, 10, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+        return;
+      }
       const lv = Math.min(b.lv || 1, 6), r = 10 + (lv - 1) * 2.5, col = COMBO_COLORS[lv - 1];
       if (lv > 1) { ctx.globalAlpha = 0.35; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(b.x, b.y, r + 7, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
       ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.fill();
@@ -714,7 +788,7 @@ window.Game = (function () {
       place: function (i, r, c) { const p = tray[i]; if (!p || p.used || !canPlace(p.shape, r, c)) return false; place(p, r, c); return true; },
       canPlace: function (i, r, c) { const p = tray[i]; return !!p && !p.used && canPlace(p.shape, r, c); },
       zombies: function () { return zombies; },
-      info: function () { return { cannons: cannonCount(), comboMax: comboMax(), comboN: comboN, comboT: comboT, revived: revived, ending: ending, score: score, level: level, lvScore: lvScore, roundTime: roundTime, freezeLeft: freezeLeft, bombMode: bombMode, used: used, hint: hint, every: spawnEvery(), step: stepMult(), bigBoost: bigBoost() }; },
+      info: function () { return { towers: towerKinds(), maxZ: maxZombies(), cannons: cannonCount(), comboMax: comboMax(), comboN: comboN, comboT: comboT, revived: revived, ending: ending, score: score, level: level, lvScore: lvScore, roundTime: roundTime, freezeLeft: freezeLeft, bombMode: bombMode, used: used, hint: hint, every: spawnEvery(), step: stepMult(), bigBoost: bigBoost() }; },
       setLevelState: function (lv, sc) { level = lv; lvScore = sc; syncLevel(true); },
       resetCombo: function () { comboN = 0; comboT = 0; }, newTray: function () { newTray(); return tray.length; }, slowLeft: function () { return slowT; },
       setCombo: function (n, t) { comboN = n; comboT = t; }, ballCount: function () { return balls.length; },
