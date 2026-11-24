@@ -295,6 +295,7 @@
   function setLevel(lv, prog) {
     curLevel = lv;
     $('hud-lvtxt').textContent = 'Lv ' + lv;
+    $('hud-lv').classList.toggle('near', prog >= 0.8 && prog < 1);
     $('hud-lvfill').style.width = Math.round(Math.max(0, Math.min(1, prog)) * 100) + '%';
     if (lv > Save.get('bestLevel')) Save.set('bestLevel', lv);
   }

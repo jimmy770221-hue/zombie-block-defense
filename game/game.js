@@ -8,7 +8,7 @@ window.Game = (function () {
   const Z = C.zombies, WALL_Y = C.zombieZone.wallY, L = C.levels, SH = C.shop;
   // v1.1 新增狀態
   let level = 1, lvScore = 0, roundTime = 0, lvBanner = null, lvKey = '';
-  let comboN = 0, comboT = 0, freezeLeft = 0, used = {}, bombMode = false, aim = null, theme = 'classic', hint = false, notice = null;
+  let comboN = 0, comboT = 0, slowT = 0, flashA = 0, rings = [], freezeLeft = 0, used = {}, bombMode = false, aim = null, theme = 'classic', hint = false, notice = null;
   let itemBtns = {};
   function pal() { return theme === 'candy' ? C.candyColors : C.colors; }
 
@@ -76,6 +76,7 @@ window.Game = (function () {
   }
   // 等級越高，大方塊／難放方塊越常出現（最多變成原本的 2 倍）
   function bigBoost() { return Math.min(L.bigBoostMax, 1 + L.bigBoostPerLevel * (level - 1)); }
+  const COMBO_COLORS = ['#ffd24a', '#7ad7ff', '#ffb347', '#ff7a7a', '#c58bff', '#ffffff'];
   function pickShape() {
     const b = bigBoost();
     let tot = 0;
@@ -92,8 +93,13 @@ window.Game = (function () {
     return { slot: i, shape: shape, color: color === undefined ? rnd(C.colors.length) : color, used: false,
              cx: slotX(i), cy: C.tray.y + 90, s: trayCell(shape) };
   }
+  // 補牌：至少有 guaranteeFit 塊現在放得下（轉向也算），避免「不是我的錯」的死局
   function newTray() {
-    tray = C.tray.slotX.map(function (x, i) { return makePiece(i, pickShape()); });
+    const need = Math.min(C.tray.guaranteeFit, C.tray.slotX.length);
+    for (let k = 0; k < 40; k++) {
+      tray = C.tray.slotX.map(function (x, i) { return makePiece(i, pickShape()); });
+      if (tray.filter(function (p) { return anyFitRot(p.shape); }).length >= need) break;
+    }
   }
 
   // ---------- 格子 ----------
@@ -186,12 +192,12 @@ window.Game = (function () {
     syncLevel(true);
   }
   // 每消除 1 條，砲台打 1 發，擊退最前面的殭屍
-  function fireLines(n) {
+  function fireLines(n, lv) {
     const gap = Math.min(C.cannon.shotGap, C.combo.volleySec / n);
     for (let i = 0; i < n; i++) {
       const z = frontZombie();
       if (z) { z.ty = Math.max(Z.spawnY, z.ty - Z.types[z.type].knock); z.pending++; }
-      balls.push({ t: -i * gap, z: z, fired: false, x: 0, y: 0 });
+      balls.push({ t: -i * gap, z: z, fired: false, x: 0, y: 0, lv: lv || 1 });
     }
   }
   function wallBroken() { return zombies.some(function (z) { return z.ty >= WALL_Y; }); }
@@ -260,8 +266,15 @@ window.Game = (function () {
       // 限時連消：每次消除重新倒數，時間內再消除 combo+1；子彈 = 條數 × 2^(combo−1)，有上限
       comboN = comboT > 0 ? comboN + 1 : 1; comboT = C.combo.seconds;
       const shots = Math.min(C.combo.maxBullets, Math.round(n * Math.pow(C.combo.growth, comboN - 1)));
-      if (comboN >= 2) { addText(G.x + N * CELL / 2, G.y + N * CELL / 2 - 140, 'COMBO ' + comboN + '　子彈 ×' + shots, '#7ad7ff', 40); core.Sfx.play('combo'); }
-      fireLines(shots);               // 先砲擊擊退
+      if (comboN >= 2) {
+        const cl = Math.min(comboN, 8);
+        addText(G.x + N * CELL / 2, G.y + N * CELL / 2 - 150, 'COMBO ' + comboN + '！', COMBO_COLORS[Math.min(comboN - 1, 5)], 40 + cl * 6);
+        addText(G.x + N * CELL / 2, G.y + N * CELL / 2 - 100, '子彈 ×' + shots, '#ffffff', 30);
+        core.Sfx.tone(880 * (1 + 0.1 * cl), 0.08, 'square', 0.14); core.Sfx.tone(1175 * (1 + 0.1 * cl), 0.14, 'square', 0.16, null, 0.08);
+        shake = Math.min(0.6, 0.25 + comboN * 0.05); core.buzz(30 + cl * 8);
+      }
+      if (n >= C.combo.bigClearLines || shots >= C.combo.bigClearLines * 2) { flashA = 0.55; slowT = C.combo.slowSec; }   // 大消除：閃白光＋短暫慢動作
+      fireLines(shots, comboN);       // 先砲擊擊退
     }
     checkLevel();                     // 升級（獎勵擊退）
     advanceZombies();                 // 再前進一步
@@ -327,7 +340,7 @@ window.Game = (function () {
     grid = []; for (let i = 0; i < N; i++) grid.push(new Array(N).fill(null));
     score = 0; drag = null; flashes = []; particles = []; texts = []; shake = 0; stuckTimer = -1;
     zombies = []; balls = []; recoil = 0; revived = false; ending = false; sinceSpawn = 0; time = 0;
-    level = 1; lvScore = 0; roundTime = 0; comboN = 0; comboT = 0; lvBanner = null; lvKey = '';
+    level = 1; lvScore = 0; roundTime = 0; comboN = 0; comboT = 0; slowT = 0; flashA = 0; rings = []; lvBanner = null; lvKey = '';
     freezeLeft = 0; used = {}; bombMode = false; aim = null; notice = null;
     theme = core.Save.get('theme'); hint = !core.Save.get('hintSeen');
     syncLevel(true); refreshItems();
@@ -338,8 +351,11 @@ window.Game = (function () {
   let score = 0;
 
   function update(dt) {
+    if (flashA > 0) flashA = Math.max(0, flashA - dt * 2.5);
+    const real = dt;
+    if (slowT > 0) { slowT -= dt; dt *= C.combo.slowScale; }          // 大消除的短暫慢動作（連消倒數仍照真實時間）
     time += dt; roundTime += dt;
-    if (comboT > 0) { comboT -= dt; if (comboT <= 0) { comboT = 0; comboN = 0; } }
+    if (comboT > 0) { comboT -= real; if (comboT <= 0) { comboT = 0; comboN = 0; } }
     syncLevel(false);
     if (lvBanner) { lvBanner.t += dt; if (lvBanner.t > L.bannerSec) lvBanner = null; }
     if (notice) { notice.t += dt; if (notice.t > 1.2) notice = null; }
@@ -359,7 +375,7 @@ window.Game = (function () {
       b.x = C.cannon.x + (tx - C.cannon.x) * p; b.y = (WALL_Y - 30) + (ty - (WALL_Y - 30)) * p;
       if (p >= 1) {
         if (b.z) {
-          b.z.pending = Math.max(0, b.z.pending - 1); b.z.hit = 0.2; core.Sfx.play('hit');
+          b.z.pending = Math.max(0, b.z.pending - 1); b.z.hit = 0.2; core.Sfx.play('hit'); rings.push({ x: tx, y: ty, t: 0, lv: b.lv });
           for (let k = 0; k < 8; k++) {
             const a = Math.random() * Math.PI * 2, v = 100 + Math.random() * 160;
             particles.push({ x: tx, y: ty, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 60, t: 0, life: 0.35, css: '#fff3a0', s: 7 });
@@ -394,6 +410,7 @@ window.Game = (function () {
       const p = particles[i]; p.t += dt; p.vy += 700 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
       if (p.t >= p.life) particles.splice(i, 1);
     }
+    for (let i = rings.length - 1; i >= 0; i--) { rings[i].t += dt; if (rings[i].t > 0.3) rings.splice(i, 1); }
     for (let i = texts.length - 1; i >= 0; i--) { const t = texts[i]; t.t += dt; if (t.t > 1.1) texts.splice(i, 1); }
     if (shake > 0) shake = Math.max(0, shake - dt);
     if (stuckTimer >= 0 && !drag) {                         // 托盤上的方塊都放不下
@@ -479,6 +496,7 @@ window.Game = (function () {
   }
   function drawOverlays(ctx) {
     const mx = G.x + N * CELL / 2, my = G.y + N * CELL / 2;
+    if (flashA > 0) { ctx.fillStyle = 'rgba(255,255,255,' + flashA + ')'; ctx.fillRect(-10, -10, core.W + 20, core.H + 20); }
     if (comboT > 0 && comboN >= 1) {                         // 連消倒數條
       const bw = 170, bx = 16, by = 168;
       stext(ctx, 'COMBO ' + comboN, bx + bw / 2, by - 8, 34, '#7ad7ff');
@@ -502,11 +520,12 @@ window.Game = (function () {
       stext(ctx, '💣 點一格引爆（再按一次炸彈取消）', 235, WALL_Y - 50, 24, '#ffd29a');
     }
     if (hint) {
-      const w = 340, h = 120, bob = Math.sin(time * 5) * 6;
+      const w = 340, h = 150, bob = Math.sin(time * 5) * 6;
       ctx.fillStyle = 'rgba(0,0,0,0.72)'; rrect(ctx, mx - w / 2, my - h / 2, w, h, 22); ctx.fill();
       ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 4; rrect(ctx, mx - w / 2, my - h / 2, w, h, 22); ctx.stroke();
-      stext(ctx, C.ui.hintText[0], mx, my - 8, 30, '#fff');
-      stext(ctx, C.ui.hintText[1], mx, my + 32, 30, '#ffe27a');
+      stext(ctx, C.ui.hintText[0], mx, my - 24, 30, '#fff');
+      stext(ctx, C.ui.hintText[1], mx, my + 16, 30, '#ffe27a');
+      stext(ctx, C.ui.hintText[2], mx, my + 56, 22, '#9be8ff');
       ctx.fillStyle = '#ffd24a'; ctx.beginPath();
       ctx.moveTo(mx - 16, my + h / 2 + 8 + bob); ctx.lineTo(mx + 16, my + h / 2 + 8 + bob); ctx.lineTo(mx, my + h / 2 + 30 + bob); ctx.closePath(); ctx.fill();
     }
@@ -596,8 +615,16 @@ window.Game = (function () {
     // 砲彈
     balls.forEach(function (b) {
       if (b.t < 0) return;
-      ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(b.x, b.y, 10, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#ffd24a'; ctx.beginPath(); ctx.arc(b.x - 3, b.y - 3, 4, 0, Math.PI * 2); ctx.fill();
+      const lv = Math.min(b.lv || 1, 6), r = 10 + (lv - 1) * 2.5, col = COMBO_COLORS[lv - 1];
+      if (lv > 1) { ctx.globalAlpha = 0.35; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(b.x, b.y, r + 7, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
+      ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(b.x - r * 0.3, b.y - r * 0.3, r * 0.4, 0, Math.PI * 2); ctx.fill();
+    });
+    // 命中的衝擊圈
+    rings.forEach(function (g) {
+      const k = g.t / 0.3;
+      ctx.globalAlpha = 1 - k; ctx.strokeStyle = COMBO_COLORS[Math.min(g.lv || 1, 6) - 1]; ctx.lineWidth = 5 * (1 - k) + 1;
+      ctx.beginPath(); ctx.arc(g.x, g.y, 14 + k * (40 + (g.lv || 1) * 6), 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
     });
   }
 
@@ -673,7 +700,7 @@ window.Game = (function () {
       zombies: function () { return zombies; },
       info: function () { return { comboN: comboN, comboT: comboT, revived: revived, ending: ending, score: score, level: level, lvScore: lvScore, roundTime: roundTime, freezeLeft: freezeLeft, bombMode: bombMode, used: used, hint: hint, every: spawnEvery(), step: stepMult(), bigBoost: bigBoost() }; },
       setLevelState: function (lv, sc) { level = lv; lvScore = sc; syncLevel(true); },
-      resetCombo: function () { comboN = 0; comboT = 0; },
+      resetCombo: function () { comboN = 0; comboT = 0; }, newTray: function () { newTray(); return tray.length; }, slowLeft: function () { return slowT; },
       setCombo: function (n, t) { comboN = n; comboT = t; }, ballCount: function () { return balls.length; },
       rotate: function (i) { if (tray[i] && !tray[i].used) rotatePiece(tray[i]); }, detonate: detonate, cellAt: cellAt,
       levelUp: levelUp, types: function () { return Object.keys(Z.types).filter(function (k) { return level >= Z.types[k].unlockLevel; }); }, shapeBoost: function () { return bigBoost(); },

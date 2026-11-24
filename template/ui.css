@@ -52,6 +52,8 @@ body {
   font-size: 18px; font-weight: 900; color: #fff; padding: 0; background: rgba(0,0,0,.4); opacity: .6;
 }
 #hud-items { position: absolute; right: 8px; top: 60px; display: flex; flex-direction: column; gap: 4px; }
+.near .lvbar i { animation: lvblink .35s infinite alternate; }
+@keyframes lvblink { from { background: #9be86b; } to { background: #fff59a; } }
 .itbtn {
   pointer-events: auto; position: relative; width: 58px; height: 58px; border: 0; border-radius: 16px; padding: 0;
   font-size: 30px; line-height: 58px; color: #fff; background: linear-gradient(#5b7a9a, #3d5873); box-shadow: 0 3px 0 #27394a;
