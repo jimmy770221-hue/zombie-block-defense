@@ -97,7 +97,6 @@ body {
 #st-stats b { font-size: 34px; color: #ffe27a; }
 .btn.half { min-width: 0; flex: 1; font-size: 28px; padding: 16px 10px; }
 #scr-start .btn-row { width: 100%; margin-top: 0; }
-#btn-set { position: absolute; left: 18px; top: 16px; font-size: 22px; padding: 8px 16px; }
 
 /* 商店、排行榜 */
 #scr-set { z-index: 35; gap: 16px; background: rgba(10, 20, 14, 0.94); }
@@ -152,7 +151,6 @@ body {
 .art .btn .ic { height: 32px; width: auto; }
 .art .btn .ic.coin { height: 26px; }
 .art .btn .ic.tg { height: 40px; }
-.art #btn-set { min-height: 52px; }
 
 /* 首頁：標題圖、底圖 */
 .art .title { font-size: 0; width: 480px; height: 150px; margin: 0; text-shadow: none; background: url(../assets/title.png?v=20261125b) center / contain no-repeat; image-rendering: pixelated; }
@@ -183,7 +181,7 @@ body {
 #dl-list { width: 100%; display: flex; flex-direction: column; gap: 10px; }
 .art #scr-daily { background: #0d1613 url(../assets/shop_bg.png?v=20261125b) center / cover no-repeat; image-rendering: pixelated; }
 #btn-daily { position: relative; }
-#btn-daily .dot { position: absolute; top: -8px; right: -6px; width: 34px; height: 34px; line-height: 34px; border-radius: 50%; background: #e53935; color: #fff; font-size: 24px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,.5); }
+#btn-daily .dot { position: absolute; top: -14px; right: -8px; width: 34px; height: 34px; line-height: 34px; border-radius: 50%; background: #e53935; color: #fff; font-size: 24px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,.5); }
 #btn-daily .dot.hidden { display: none; }
 #scr-shop { overflow: hidden; }
 #sh-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }

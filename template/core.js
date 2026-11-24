@@ -215,8 +215,10 @@
         '<button class="btn gray half" id="btn-shop">🛒 商店</button>' +
         '<button class="btn gray half" id="btn-board">🏆 排行榜</button>' +
       '</div>' +
-      '<button class="btn gold" id="btn-daily">📅 每日獎勵<span id="dl-dot" class="dot hidden">!</span></button>' +
-      '<button class="btn gray small" id="btn-set" aria-label="設定"><span class="emo">⚙ </span>' + artImg('icon_gear') + '設定</button>' +
+      '<div class="btn-row">' +
+        '<button class="btn gold half" id="btn-daily">📅 每日獎勵<span id="dl-dot" class="dot hidden">!</span></button>' +
+        '<button class="btn gray half" id="btn-set" aria-label="設定"><span class="emo">⚙ </span>' + artImg('icon_gear') + '設定</button>' +
+      '</div>' +
       '<div id="ver"></div>' +
     '</div>' +
     '<div id="scr-set" class="screen hidden">' +
