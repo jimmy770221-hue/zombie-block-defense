@@ -41,11 +41,11 @@ body {
 
 /* 遊戲中上方：左上分數/最高/等級，右上小暫停鈕，右邊一欄放道具鈕 */
 #hud { position: absolute; inset: 0; pointer-events: none; }
-#hud-left { position: absolute; left: 16px; top: 8px; text-shadow: 0 2px 0 rgba(0,0,0,.55); }
-#hud-score { font-size: 38px; font-weight: 900; line-height: 1.1; }
-#hud-best { font-size: 20px; font-weight: 700; color: rgba(255,255,255,.78); line-height: 1.2; }
-#hud-lv { margin-top: 4px; display: flex; align-items: center; gap: 8px; font-size: 22px; font-weight: 900; color: #ffe27a; }
-.lvbar { width: 110px; height: 7px; border-radius: 4px; background: rgba(0,0,0,.5); overflow: hidden; }
+#hud-left { position: absolute; left: 12px; top: 6px; right: 66px; display: flex; align-items: center; gap: 10px; text-shadow: 0 2px 0 rgba(0,0,0,.6); background: rgba(0,0,0,.28); border-radius: 18px; padding: 2px 12px; width: fit-content; max-width: calc(100% - 78px); }
+#hud-score { font-size: 28px; font-weight: 900; line-height: 1.1; }
+#hud-best { font-size: 15px; font-weight: 700; color: rgba(255,255,255,.78); line-height: 1.2; white-space: nowrap; }
+#hud-lv { display: flex; align-items: center; gap: 6px; font-size: 17px; font-weight: 900; color: #ffe27a; white-space: nowrap; }
+.lvbar { width: 60px; height: 7px; border-radius: 4px; background: rgba(0,0,0,.5); overflow: hidden; }
 .lvbar i { display: block; height: 100%; width: 0; background: #9be86b; }
 #btn-pause {
   pointer-events: auto; position: absolute; right: 12px; top: 8px; width: 46px; height: 46px; border-radius: 50%; border: 0;
@@ -97,9 +97,12 @@ body {
 #st-stats b { font-size: 34px; color: #ffe27a; }
 .btn.half { min-width: 0; flex: 1; font-size: 28px; padding: 16px 10px; }
 #scr-start .btn-row { width: 100%; margin-top: 0; }
-#btn-sound { position: absolute; left: 18px; bottom: 14px; font-size: 22px; padding: 8px 16px; }
+#btn-set { position: absolute; left: 18px; bottom: 14px; font-size: 22px; padding: 8px 16px; }
 
 /* 商店、排行榜 */
+#scr-set { z-index: 35; gap: 16px; background: rgba(10, 20, 14, 0.94); }
+.row.sm { font-size: 20px; opacity: .85; }
+.row.sm b { font-size: 24px; }
 #scr-shop, #scr-board { justify-content: flex-start; padding-top: 50px; gap: 12px; z-index: 35; background: rgba(10, 20, 14, 0.94); }
 #sh-list, #bd-list { width: 100%; display: flex; flex-direction: column; gap: 10px; }
 .sh-row { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,.08); border-radius: 16px; padding: 10px 14px; text-align: left; }

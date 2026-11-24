@@ -8,7 +8,7 @@ window.Game = (function () {
   const Z = C.zombies, WALL_Y = C.zombieZone.wallY, L = C.levels, SH = C.shop;
   // v1.1 新增狀態
   let level = 1, lvScore = 0, roundTime = 0, lvBanner = null, lvKey = '';
-  let comboN = 0, comboT = 0, slowT = 0, flashA = 0, rings = [], freezeLeft = 0, used = {}, bombMode = false, aim = null, theme = 'classic', hint = false, notice = null;
+  let statLines = 0, statCombo = 0, comboN = 0, comboT = 0, slowT = 0, flashA = 0, rings = [], freezeLeft = 0, used = {}, bombMode = false, aim = null, theme = 'classic', hint = false, notice = null;
   let itemBtns = {};
   function pal() { return theme === 'candy' ? C.candyColors : C.colors; }
 
@@ -208,7 +208,7 @@ window.Game = (function () {
     if (ending) return;
     ending = true; stuckTimer = -1; bombMode = false; aim = null; refreshItems();
     const text = reason === 'zombie' ? '殭屍衝破圍牆了！' : '沒有地方可以放方塊了！';
-    function finish() { core.Sfx.play('over'); core.endGame(score, reason, { level: level }); }
+    function finish() { core.Sfx.play('over'); core.endGame(score, reason, { level: level, stats: { maxCombo: statCombo, lines: statLines } }); }
     if (revived) { finish(); return; }
     core.Sfx.play('over');
     core.askRevive(text, function () { revived = true; ending = false; doRevive(); refreshItems(); }, finish);
@@ -265,6 +265,7 @@ window.Game = (function () {
     if (n > 0) {
       // 限時連消：每次消除重新倒數，時間內再消除 combo+1；子彈 = 條數 × 2^(combo−1)，有上限
       comboN = comboT > 0 ? comboN + 1 : 1; comboT = C.combo.seconds;
+      statLines += n; if (comboN > statCombo) statCombo = comboN;
       const shots = Math.min(C.combo.maxBullets, Math.round(n * Math.pow(C.combo.growth, comboN - 1)));
       if (comboN >= 2) {
         const cl = Math.min(comboN, 8);
@@ -340,7 +341,7 @@ window.Game = (function () {
     grid = []; for (let i = 0; i < N; i++) grid.push(new Array(N).fill(null));
     score = 0; drag = null; flashes = []; particles = []; texts = []; shake = 0; stuckTimer = -1;
     zombies = []; balls = []; recoil = 0; revived = false; ending = false; sinceSpawn = 0; time = 0;
-    level = 1; lvScore = 0; roundTime = 0; comboN = 0; comboT = 0; slowT = 0; flashA = 0; rings = []; lvBanner = null; lvKey = '';
+    statLines = 0; statCombo = 0; level = 1; lvScore = 0; roundTime = 0; comboN = 0; comboT = 0; slowT = 0; flashA = 0; rings = []; lvBanner = null; lvKey = '';
     freezeLeft = 0; used = {}; bombMode = false; aim = null; notice = null;
     theme = core.Save.get('theme'); hint = !core.Save.get('hintSeen');
     syncLevel(true); refreshItems();

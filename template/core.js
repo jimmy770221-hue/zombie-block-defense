@@ -22,7 +22,7 @@
     const defaults = () => {
       const inv = {}; ITEM_IDS.forEach(function (id) { inv[id] = 0; });
       // v 一直是 1：新欄位缺少時用預設值，舊存檔可以直接讀
-      return { v: 1, best: 0, coins: 0, sound: true, vibrate: true,
+      return { v: 1, best: 0, coins: 0, sound: true, music: true, vibrate: true,
                bestLevel: 1, hintSeen: false, inv: inv, theme: 'classic', ownedThemes: ['classic'],
                board: [], lastName: '', lastEntryT: 0 };
     };
@@ -34,6 +34,7 @@
         if (Number.isFinite(o.best) && o.best >= 0) d.best = o.best;
         if (Number.isFinite(o.coins) && o.coins >= 0) d.coins = o.coins;
         if (typeof o.sound === 'boolean') d.sound = o.sound;
+        if (typeof o.music === 'boolean') d.music = o.music;
         if (typeof o.vibrate === 'boolean') d.vibrate = o.vibrate;
         if (Number.isFinite(o.bestLevel) && o.bestLevel >= 1) d.bestLevel = Math.floor(o.bestLevel);
         if (typeof o.hintSeen === 'boolean') d.hintSeen = o.hintSeen;
@@ -132,9 +133,27 @@
       over: function () { tone(330, 0.2, 'sawtooth', 0.22, 120); tone(165, 0.4, 'sawtooth', 0.22, 70, 0.2); },
       coin: function () { tone(988, 0.08, 'square', 0.15); tone(1319, 0.18, 'square', 0.15, null, 0.08); }
     };
+    // 背景音樂：程式合成的短旋律，一直循環（只在遊戲進行中播）
+    const MEL = [440, 0, 523, 0, 659, 0, 523, 0, 440, 0, 392, 0, 349, 0, 392, 0, 440, 0, 523, 0, 659, 0, 784, 0, 659, 0, 523, 0, 587, 0, 523, 0];
+    const BASS = [110, 110, 87.3, 87.3, 98, 98, 110, 110];
+    let mWant = null, mTimer = null, mStep = 0, mNext = 0;
+    function mTick() {
+      const a = getCtx();
+      if (!a || !mWant || !mWant()) { mNext = 0; return; }
+      if (a.state === 'suspended') return;
+      if (!mNext || mNext < a.currentTime) { mNext = a.currentTime + 0.05; }
+      while (mNext < a.currentTime + 0.4) {
+        const f = MEL[mStep % MEL.length], d = mNext - a.currentTime;
+        if (f) tone(f, 0.22, 'triangle', 0.05, null, d);
+        if (mStep % 4 === 0) tone(BASS[(mStep / 4) % BASS.length], 0.5, 'sine', 0.07, null, d);
+        mStep++; mNext += 0.24;
+      }
+    }
+    function musicInit(want) { mWant = want; if (!mTimer) mTimer = setInterval(mTick, 120); }
     return {
       presets: presets,
       unlock: unlock,
+      musicInit: musicInit,
       setMuted: function (m) { muted = m; },
       play: function (name) {
         if (muted || !Save.get('sound')) return;
@@ -177,8 +196,15 @@
         '<button class="btn gray half" id="btn-shop">🛒 商店</button>' +
         '<button class="btn gray half" id="btn-board">🏆 排行榜</button>' +
       '</div>' +
-      '<button class="btn gray small" id="btn-sound"></button>' +
+      '<button class="btn gray small" id="btn-set">⚙ 設定</button>' +
       '<div id="ver"></div>' +
+    '</div>' +
+    '<div id="scr-set" class="screen hidden">' +
+      '<div class="h2">設定</div>' +
+      '<button class="btn gray" id="btn-sound"></button>' +
+      '<button class="btn gray" id="btn-music"></button>' +
+      '<button class="btn gray" id="btn-vib"></button>' +
+      '<button class="btn" id="btn-set-close">返回</button>' +
     '</div>' +
     '<div id="scr-shop" class="screen hidden">' +
       '<div class="h2">商店</div>' +
@@ -195,6 +221,7 @@
       '<div class="h2">暫停中</div>' +
       '<button class="btn" id="btn-resume">繼續</button>' +
       '<button class="btn gray" id="btn-restart">重新開始</button>' +
+      '<button class="btn gray" id="btn-pause-set">⚙ 設定</button>' +
       '<button class="btn gray" id="btn-home">回開始畫面</button>' +
     '</div>' +
     '<div id="scr-over" class="screen hidden">' +
@@ -202,6 +229,7 @@
       '<div class="row">本局分數　<b id="o-score">0</b></div>' +
       '<div class="row" id="o-lvrow">到達等級　<b id="o-level">Lv 1</b></div>' +
       '<div class="new-best hidden" id="o-new">新紀錄！</div>' +
+      '<div class="row sm" id="o-st">連消最高 <b id="o-combo">0</b>　消除 <b id="o-lines">0</b> 行　<b id="o-time">0</b> 秒</div>' +
       '<div class="row">最高分　<b id="o-best">0</b></div>' +
       '<div class="row">獲得金幣　<b id="o-coins">0</b></div>' +
       '<div class="row">累計金幣　<b id="o-total">0</b></div>' +
@@ -236,7 +264,7 @@
     '</div>';
   while (ui.firstChild) stage.appendChild(ui.firstChild);
   const $ = function (id) { return document.getElementById(id); };
-  const screens = ['scr-start', 'scr-pause', 'scr-over', 'scr-stats', 'scr-revive', 'scr-shop', 'scr-board'];
+  const screens = ['scr-start', 'scr-pause', 'scr-over', 'scr-stats', 'scr-revive', 'scr-shop', 'scr-board', 'scr-set'];
   function show(id) { $(id).classList.remove('hidden'); }
   function hide(id) { $(id).classList.add('hidden'); }
   function showOnly(id) { screens.forEach(hide); if (id) show(id); }
@@ -335,6 +363,9 @@
     doubled = false;
     if (roundCoins > 0) Save.add('coins', roundCoins);
     const rank = enterBoard(finalScore, level);
+    const st = info && info.stats;
+    $('o-st').classList.toggle('hidden', !st);
+    if (st) { $('o-combo').textContent = st.maxCombo | 0; $('o-lines').textContent = st.lines | 0; $('o-time').textContent = sec; }
     refreshOver(isNew);
     showRank(rank);
     showOnly('scr-over');
@@ -574,12 +605,24 @@
     $('t-title').textContent = C.title;
     $('ver').textContent = 'v' + C.version;
     document.title = C.title;
-    const refreshSound = function () { $('btn-sound').textContent = Save.get('sound') ? '音效：開' : '音效：關'; };
+    const refreshSound = function () {
+      $('btn-sound').textContent = Save.get('sound') ? '音效：開' : '音效：關';
+      $('btn-music').textContent = Save.get('music') ? '音樂：開' : '音樂：關';
+      $('btn-vib').textContent = Save.get('vibrate') ? '震動：開' : '震動：關';
+    };
+    let setFrom = 'scr-start';
+    const openSet = function (from) { setFrom = from; refreshSound(); showOnly('scr-set'); };
+    Sfx.musicInit(function () { return state === 'play' && !paused && !Ads.active && Save.get('music'); });
     refreshSound();
     refreshStart();
 
     $('btn-start').onclick = function () { Sfx.unlock(); Sfx.play('click'); startRound(); };
     $('btn-sound').onclick = function () { Save.set('sound', !Save.get('sound')); refreshSound(); Sfx.unlock(); Sfx.play('click'); };
+    $('btn-music').onclick = function () { Save.set('music', !Save.get('music')); refreshSound(); Sfx.unlock(); Sfx.play('click'); };
+    $('btn-vib').onclick = function () { Save.set('vibrate', !Save.get('vibrate')); refreshSound(); Sfx.play('click'); buzz(30); };
+    $('btn-set').onclick = function () { Sfx.unlock(); Sfx.play('click'); openSet('scr-start'); };
+    $('btn-pause-set').onclick = function () { Sfx.play('click'); hide('scr-pause'); openSet('scr-pause'); };
+    $('btn-set-close').onclick = function () { Sfx.play('click'); showOnly(null); if (setFrom === 'scr-pause') show('scr-pause'); else showOnly('scr-start'); };
     $('btn-pause').onclick = pauseGame;
     $('btn-resume').onclick = resumeGame;
     $('btn-restart').onclick = function () { leaveRound('restart'); hide('scr-pause'); startRound(); };
