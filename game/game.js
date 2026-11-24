@@ -145,7 +145,7 @@ window.Game = (function () {
   function spawnZombie(type) {
     if (zombies.length >= Z.max) return;
     const free = Z.lanes.filter(function (x) {
-      return zombies.every(function (z) { return !(Math.abs(z.x - x) < 60 && z.ty < Z.spawnY + Z.spawnGap); });
+      return zombies.every(function (z) { return !(Math.abs(z.x - x) < 30 && z.ty < Z.spawnY + Z.spawnGap); });
     });
     if (!free.length) return;
     const x = free[rnd(free.length)] + rnd(21) - 10;
@@ -377,7 +377,7 @@ window.Game = (function () {
       const b = balls[i]; b.t += dt;
       if (b.t < 0) continue;
       if (!b.fired) { b.fired = true; recoil = 1; if (b.ci === 0) { core.Sfx.play('shoot'); core.buzz(15); } }
-      const tx = b.z ? b.z.x : b.cx, ty = b.z ? b.z.y - Z.types[b.z.type].r * depthScale(b.z.y) : 100;
+      const tx = b.z ? laneX(b.z.x, b.z.y) : b.cx, ty = b.z ? b.z.y - Z.types[b.z.type].r * depthScale(b.z.y) : 100;
       const p = Math.min(1, b.t / C.cannon.flight);
       b.x = b.cx + (tx - b.cx) * p; b.y = (WALL_Y - 30) + (ty - (WALL_Y - 30)) * p;
       if (p >= 1) {
@@ -557,6 +557,8 @@ window.Game = (function () {
   const FRAME = { normal: 88, fast: 72, fat: 104 };
   // 景深：越靠近圍牆（y 越大）殭屍畫得越大、越清楚；只影響畫面，不影響遊戲邏輯
   function depthT(y) { return Math.max(0, Math.min(1, (y - Z.spawnY) / (WALL_Y - Z.spawnY))); }
+  // 畫面上的左右位置：賽道越遠越往中線（270）收攏，像沿著遠處的路走過來；z.x 仍是賽道本身的位置
+  function laneX(x, y) { return 270 + (x - 270) * (Z.laneNarrow + (1 - Z.laneNarrow) * depthT(y)); }
   function depthScale(y) { const t = depthT(y); return Z.depthFar + (Z.depthNear - Z.depthFar) * t; }
   function drawZombieArt(ctx, z) {
     const T = Z.types[z.type], im = ART[z.type];
@@ -564,7 +566,7 @@ window.Game = (function () {
     const f = FRAME[z.type], size = T.r * 4.2, fr = Math.floor(time * 8 + z.ph * 2) % 4;
     const sq = z.hit > 0 ? 1 + z.hit * 1.2 : 1;
     ctx.save();
-    ctx.translate(z.x, z.y);
+    ctx.translate(laneX(z.x, z.y), z.y);
     const ds = depthScale(z.y); ctx.scale(ds, ds); ctx.globalAlpha = Z.depthFog + (1 - Z.depthFog) * Math.min(1, depthT(z.y) * 2.5);
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.beginPath(); ctx.ellipse(0, 0, T.r * 0.9, T.r * 0.28, 0, 0, Math.PI * 2); ctx.fill();
@@ -580,7 +582,7 @@ window.Game = (function () {
     const T = Z.types[z.type], r = T.r;
     const bob = Math.sin(time * 8 + z.ph) * 3, sq = z.hit > 0 ? 1 + z.hit * 1.2 : 1;
     ctx.save();
-    ctx.translate(z.x, z.y);
+    ctx.translate(laneX(z.x, z.y), z.y);
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.beginPath(); ctx.ellipse(0, 0, r * 0.9, r * 0.28, 0, 0, Math.PI * 2); ctx.fill();
     ctx.translate(0, -r + bob); ctx.scale(1 / sq, sq);
