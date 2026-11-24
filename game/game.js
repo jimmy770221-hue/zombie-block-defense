@@ -377,7 +377,7 @@ window.Game = (function () {
       const b = balls[i]; b.t += dt;
       if (b.t < 0) continue;
       if (!b.fired) { b.fired = true; recoil = 1; if (b.ci === 0) { core.Sfx.play('shoot'); core.buzz(15); } }
-      const tx = b.z ? b.z.x : b.cx, ty = b.z ? b.z.y - Z.types[b.z.type].r : 100;
+      const tx = b.z ? b.z.x : b.cx, ty = b.z ? b.z.y - Z.types[b.z.type].r * depthScale(b.z.y) : 100;
       const p = Math.min(1, b.t / C.cannon.flight);
       b.x = b.cx + (tx - b.cx) * p; b.y = (WALL_Y - 30) + (ty - (WALL_Y - 30)) * p;
       if (p >= 1) {
@@ -555,6 +555,9 @@ window.Game = (function () {
     const im = new Image(); im.onload = function () { ART[n] = im; }; im.src = 'assets/' + n + '.png';
   });
   const FRAME = { normal: 88, fast: 72, fat: 104 };
+  // 景深：越靠近圍牆（y 越大）殭屍畫得越大、越清楚；只影響畫面，不影響遊戲邏輯
+  function depthT(y) { return Math.max(0, Math.min(1, (y - Z.spawnY) / (WALL_Y - Z.spawnY))); }
+  function depthScale(y) { const t = depthT(y); return Z.depthFar + (Z.depthNear - Z.depthFar) * t; }
   function drawZombieArt(ctx, z) {
     const T = Z.types[z.type], im = ART[z.type];
     if (!im) return false;
@@ -562,12 +565,13 @@ window.Game = (function () {
     const sq = z.hit > 0 ? 1 + z.hit * 1.2 : 1;
     ctx.save();
     ctx.translate(z.x, z.y);
+    const ds = depthScale(z.y); ctx.scale(ds, ds); ctx.globalAlpha = Z.depthFog + (1 - Z.depthFog) * Math.min(1, depthT(z.y) * 2.5);
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.beginPath(); ctx.ellipse(0, 0, T.r * 0.9, T.r * 0.28, 0, 0, Math.PI * 2); ctx.fill();
     ctx.translate(0, size * 0.1); ctx.scale(1 / sq, sq);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(im, fr * f, 0, f, f, -size / 2, -size, size, size);
-    if (z.hit > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.min(0.6, z.hit * 3); ctx.drawImage(im, fr * f, 0, f, f, -size / 2, -size, size, size); }
+    if (z.hit > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha *= Math.min(0.6, z.hit * 3); ctx.drawImage(im, fr * f, 0, f, f, -size / 2, -size, size, size); }
     ctx.restore();
     return true;
   }
