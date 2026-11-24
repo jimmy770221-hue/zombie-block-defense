@@ -4,7 +4,7 @@ window.Game = (function () {
   const C = window.CONFIG, G = C.grid, CELL = G.cell, N = G.size;
   let core, shapes, totalW;
   let grid, tray, drag, flashes, particles, texts, shake, stuckTimer;
-  let zombies, balls, recoil, revived, ending, sinceSpawn, time;
+  let zombies, balls, revived, ending, sinceSpawn, time;
   const Z = C.zombies, WALL_Y = C.zombieZone.wallY, L = C.levels, SH = C.shop;
   // v1.1 新增狀態
   let level = 1, lvScore = 0, roundTime = 0, lvBanner = null, lvKey = '';
@@ -287,6 +287,8 @@ window.Game = (function () {
     const n = rows.length + cols.length;
     if (n > 0) {
       const kill = {};
+      rows.forEach(function (i) { clearBands.push({ index: i, column: false, time: 0 }); });
+      cols.forEach(function (i) { clearBands.push({ index: i, column: true, time: 0 }); });
       rows.forEach(function (i) { for (let j = 0; j < N; j++) kill[i * N + j] = 1; });
       cols.forEach(function (j) { for (let i = 0; i < N; i++) kill[i * N + j] = 1; });
       Object.keys(kill).forEach(function (k) {
@@ -380,10 +382,23 @@ window.Game = (function () {
   }
 
   // ---------- 對外介面 ----------
+  let clearBands = [];
+  let towerFlashes = [];
+  const towerFlashLife = { arrow: 0.12, cannon: 0.23, mg: 0.08 };
+  const muzzleRows = { arrow: 10, cannon: 8, mg: 8 };
+
+  function towerSize() { return cannonCount() >= 4 ? 80 : 96; }
+
+  function muzzleY(kind, size) {
+    return WALL_Y + 12 - size + size * muzzleRows[kind] / 64;
+  }
+
   function start() {
+    clearBands = [];
+    towerFlashes = [];
     grid = []; for (let i = 0; i < N; i++) grid.push(new Array(N).fill(null));
     score = 0; drag = null; flashes = []; particles = []; texts = []; shake = 0; stuckTimer = -1;
-    zombies = []; balls = []; recoil = 0; revived = false; ending = false; sinceSpawn = 0; time = 0;
+    zombies = []; balls = []; revived = false; ending = false; sinceSpawn = 0; time = 0;
     statLines = 0; statCombo = 0; level = 1; lvScore = 0; roundTime = 0; comboN = 0; comboT = 0; slowT = 0; flashA = 0; rings = []; lvBanner = null; lvKey = '';
     freezeLeft = 0; used = {}; bombMode = false; aim = null; notice = null;
     theme = core.Save.get('theme'); hint = !core.Save.get('hintSeen');
@@ -395,6 +410,8 @@ window.Game = (function () {
   let score = 0;
 
   function update(dt) {
+    clearBands = clearBands.filter(function (band) { band.time += dt; return band.time < 0.18; });
+    towerFlashes = towerFlashes.map(function (remaining) { return Math.max(0, remaining - dt); });
     if (flashA > 0) flashA = Math.max(0, flashA - dt * 2.5);
     const real = dt;
     if (slowT > 0) { slowT -= dt; dt *= C.combo.slowScale; }          // 大消除的短暫慢動作（連消倒數仍照真實時間）
@@ -413,10 +430,10 @@ window.Game = (function () {
     for (let i = balls.length - 1; i >= 0; i--) {
       const b = balls[i]; b.t += dt;
       if (b.t < 0) continue;
-      if (!b.fired) { b.fired = true; recoil = 1; if (b.ci === 0) { core.Sfx.play('shoot'); core.buzz(15); } }
+      if (!b.fired) { b.fired = true; towerFlashes[b.ci] = towerFlashLife[b.kind]; b.originY = muzzleY(b.kind, towerSize()); if (b.ci === 0) { core.Sfx.play('shoot'); core.buzz(15); } }
       const tx = b.z ? laneX(b.z.x, b.z.y) : b.cx, ty = b.z ? b.z.y - Z.types[b.z.type].r * depthScale(b.z.y) : 100;
       const p = Math.min(1, b.t / C.cannon.flight);
-      b.x = b.cx + (tx - b.cx) * p; b.y = (WALL_Y - 30) + (ty - (WALL_Y - 30)) * p;
+      b.x = b.cx + (tx - b.cx) * p; b.y = b.originY + (ty - b.originY) * p;
       if (p >= 1) {
         if (b.z) {
           b.z.pending = Math.max(0, b.z.pending - 1); b.z.hit = 0.2; if (b.z.hp <= 0 && b.z.pending === 0) killZombie(b.z); core.Sfx.play('hit'); rings.push({ x: tx, y: ty, t: 0, lv: b.lv });
@@ -428,7 +445,6 @@ window.Game = (function () {
         balls.splice(i, 1);
       }
     }
-    if (recoil > 0) recoil = Math.max(0, recoil - dt * 6);
     // 方塊平滑移動（拖曳中跟著手指，放開後彈回托盤）
     tray.forEach(function (p) {
       if (p.used) return;
@@ -470,7 +486,9 @@ window.Game = (function () {
     drawZone(ctx);
 
     // 格子底板
-    ctx.fillStyle = '#10201a';
+    ctx.fillStyle = '#66574a';
+    rrect(ctx, G.x - 13, G.y - 13, N * CELL + 26, N * CELL + 26, 18); ctx.fill();
+    ctx.fillStyle = '#332b26';
     rrect(ctx, G.x - 10, G.y - 10, N * CELL + 20, N * CELL + 20, 18); ctx.fill();
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
       ctx.fillStyle = '#1c3328';
@@ -505,6 +523,13 @@ window.Game = (function () {
       rrect(ctx, x + 2, y + 2, CELL - 4, CELL - 4, 10); ctx.fill();
     });
     // 碎片
+    clearBands.forEach(function (band) {
+      const fade = 1 - band.time / 0.18;
+      const offset = band.index * CELL + Math.floor(CELL / 2);
+      ctx.fillStyle = 'rgba(255,219,142,' + fade * 0.72 + ')';
+      if (band.column) ctx.fillRect(G.x + offset - 2, G.y, 4, N * CELL);
+      else ctx.fillRect(G.x, G.y + offset - 2, N * CELL, 4);
+    });
     particles.forEach(function (p) {
       ctx.globalAlpha = Math.max(0, 1 - p.t / p.life);
       ctx.fillStyle = p.css || pal()[p.color];
@@ -589,7 +614,7 @@ window.Game = (function () {
   // ---------- 殭屍區繪製（先用程式畫，第 4 天換成圖片）----------
   // ---------- 圖片素材（載入失敗就退回程式畫）----------
   const ART = {};
-  ['normal', 'fast', 'fat', 'cannon', 'wall', 'bg'].forEach(function (n) {
+  ['normal', 'fast', 'fat', 'arrow', 'cannon', 'mg', 'wall', 'bg'].forEach(function (n) {
     const im = new Image(); im.onload = function () { ART[n] = im; }; im.src = 'assets/' + n + '.png';
   });
   const FRAME = { normal: 88, fast: 72, fat: 104 };
@@ -601,7 +626,7 @@ window.Game = (function () {
   function drawZombieArt(ctx, z) {
     const T = Z.types[z.type], im = ART[z.type];
     if (!im) return false;
-    const f = FRAME[z.type], size = T.r * 4.2, fr = Math.floor(time * 8 + z.ph * 2) % 4;
+    const f = FRAME[z.type], size = T.r * 4.2, fr = Math.floor(time * (z.type === 'fast' ? 12 : 8) + z.ph * 2) % 4;
     const sq = z.hit > 0 ? 1 + z.hit * 1.2 : 1;
     ctx.save();
     ctx.translate(laneX(z.x, z.y), z.y);
@@ -672,6 +697,33 @@ window.Game = (function () {
     }
     ctx.restore();
   }
+  function drawTowerFlash(ctx, kind, x, size, back, strength) {
+    const y = muzzleY(kind, size) + back;
+    ctx.save();
+    ctx.globalAlpha = strength;
+    if (kind === 'arrow') {
+      ctx.strokeStyle = '#edce91';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x - size * 0.36, y + size * 0.31);
+      ctx.lineTo(x, y + size * (0.37 + strength * 0.05));
+      ctx.lineTo(x + size * 0.36, y + size * 0.31);
+      ctx.stroke();
+    } else if (kind === 'cannon') {
+      const lift = (1 - strength) * 11;
+      ctx.fillStyle = '#a9a69e';
+      ctx.fillRect(x - 7, y - lift - 3, 14, 6);
+      ctx.fillStyle = '#e2cfaa';
+      ctx.fillRect(x - 4, y - lift - 5, 8, 5);
+    } else {
+      ctx.fillStyle = '#ffce70';
+      [-0.14, 0, 0.14].forEach(function (offset) {
+        ctx.fillRect(x + size * offset - 2, y - 5, 4, 7);
+      });
+    }
+    ctx.restore();
+  }
+
   function drawZone(ctx) {
     if (ART.bg) { ctx.imageSmoothingEnabled = false; ctx.drawImage(ART.bg, 0, 0, 256, 192, 0, C.zombieZone.top, core.W, WALL_Y - C.zombieZone.top); }
     ctx.fillStyle = ART.bg ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.18)';
@@ -682,19 +734,31 @@ window.Game = (function () {
     // 圍牆
     if (ART.wall) { ctx.imageSmoothingEnabled = false; for (let i = 0; i < 8; i++) ctx.drawImage(ART.wall, 0, 8, 64, 52, i * 67.5, WALL_Y - 6, 68, 44); }
     else { ctx.fillStyle = '#8a6a43'; ctx.fillRect(0, WALL_Y, core.W, 14); ctx.fillStyle = '#b28a58'; ctx.fillRect(0, WALL_Y, core.W, 4); }
-    if (warning()) {                                                           // 殭屍快到：圍牆閃紅色
-      const a = 0.3 + 0.3 * Math.sin(time * 12);
-      ctx.fillStyle = 'rgba(255,40,40,' + a + ')'; ctx.fillRect(0, WALL_Y - 4, core.W, 22);
-      ctx.fillStyle = 'rgba(255,40,40,' + (a * 0.25) + ')'; ctx.fillRect(0, C.zombieZone.top, core.W, WALL_Y - C.zombieZone.top);
+    if (warning()) {
+      const front = frontZombie();
+      const x = laneX(front.x, front.y);
+      const segment = core.W / 8;
+      const left = Math.floor(x / segment) * segment;
+      const pulse = 0.5 + Math.sin(time * 12) * 0.25;
+      ctx.fillStyle = 'rgba(211,47,35,' + pulse * 0.22 + ')';
+      ctx.fillRect(0, WALL_Y - 4, core.W, 27);
+      ctx.fillStyle = 'rgba(255,84,62,' + pulse + ')';
+      ctx.fillRect(left + 2, WALL_Y - 4, segment - 4, 4);
+      ctx.fillRect(left + 2, WALL_Y + 17, segment - 4, 3);
     }
-    // 塔（開砲時後座力）：箭塔／砲塔／機槍塔
-    const back = recoil * C.cannon.recoil, csz = cannonCount() >= 4 ? 80 : 96, kinds = towerKinds();
-    cannonXs().forEach(function (cx, ci) { drawTower(ctx, kinds[ci], cx, back, csz); });
+    const size = towerSize(), kinds = towerKinds();
+    cannonXs().forEach(function (cx, ci) {
+      const kind = kinds[ci], remaining = towerFlashes[ci] || 0;
+      const strength = remaining / towerFlashLife[kind];
+      const back = strength * C.cannon.recoil * (kind === 'cannon' ? 1 : 0.3);
+      drawTower(ctx, kind, cx, back, size);
+      if (strength > 0) drawTowerFlash(ctx, kind, cx, size, back, strength);
+    });
     // 砲彈
     balls.forEach(function (b) {
       if (b.t < 0) return;
       if (b.kind === 'arrow') {                                   // 箭：細長、朝目標飛
-        const dx = b.x - b.cx, dy = b.y - (WALL_Y - 30), len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+        const dx = b.x - b.cx, dy = b.y - b.originY, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
         ctx.strokeStyle = '#e8d9a8'; ctx.lineWidth = 4; ctx.lineCap = 'round';
         ctx.beginPath(); ctx.moveTo(b.x - ux * 26, b.y - uy * 26); ctx.lineTo(b.x, b.y); ctx.stroke();
         ctx.fillStyle = '#d8d8d8'; ctx.beginPath(); ctx.arc(b.x, b.y, 4.5, 0, Math.PI * 2); ctx.fill();
