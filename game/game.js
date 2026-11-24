@@ -615,7 +615,7 @@ window.Game = (function () {
   // ---------- 圖片素材（載入失敗就退回程式畫）----------
   const ART = {};
   ['normal', 'fast', 'fat', 'arrow', 'cannon', 'mg', 'wall', 'bg'].forEach(function (n) {
-    const im = new Image(); im.onload = function () { ART[n] = im; }; im.src = 'assets/' + n + '.png';
+    const im = new Image(); im.onload = function () { ART[n] = im; }; im.src = 'assets/' + n + '.png?v=' + C.version;
   });
   const FRAME = { normal: 88, fast: 72, fat: 104 };
   // 景深：越靠近圍牆（y 越大）殭屍畫得越大、越清楚；只影響畫面，不影響遊戲邏輯

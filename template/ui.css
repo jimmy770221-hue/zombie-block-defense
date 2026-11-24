@@ -86,10 +86,10 @@ body {
 
 /* 開始畫面 */
 #scr-start { isolation: isolate; justify-content: flex-start; gap: 18px; padding-top: 70px; overflow: hidden; background: rgba(8, 16, 11, 0.35); }
-#st-bg { position: absolute; inset: 0; z-index: -1; background: #10190f url(../assets/bg.png) center / cover no-repeat; image-rendering: pixelated; }
+#st-bg { position: absolute; inset: 0; z-index: -1; background: #10190f url(../assets/bg.png?v=20261124a) center / cover no-repeat; image-rendering: pixelated; }
 #st-bg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(5,10,7,.55), rgba(5,10,7,.15) 40%, rgba(5,10,7,.7)); }
 #scr-start .title { margin-bottom: 0; }
-#st-zombie { width: 264px; height: 264px; background: url(../assets/normal.png) 0 0 / 1056px 264px no-repeat; image-rendering: pixelated; animation: zwalk .55s steps(4) infinite; filter: drop-shadow(0 12px 6px rgba(0,0,0,.45)); }
+#st-zombie { width: 264px; height: 264px; background: url(../assets/normal.png?v=20261124a) 0 0 / 1056px 264px no-repeat; image-rendering: pixelated; animation: zwalk .55s steps(4) infinite; filter: drop-shadow(0 12px 6px rgba(0,0,0,.45)); }
 @keyframes zwalk { to { background-position-x: -1056px; } }
 #st-stats { display: flex; gap: 10px; width: 100%; }
 #st-stats > div { flex: 1; background: rgba(0,0,0,.5); border-radius: 16px; padding: 10px 6px; display: flex; flex-direction: column; gap: 2px; }
